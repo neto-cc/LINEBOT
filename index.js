@@ -57,40 +57,32 @@ app.post("/webhook", (req, res) => {
 
 // イベント処理関数
 async function handleEvent(event) {
-  const userMessage = event.message.text;  // LINEから送られてきたメッセージテキスト
+  if (event.type === "message" && event.message.type === "text") {
+    const receivedMessage = event.message.text; // 受け取ったメッセージ（「こんにちは」など）
+    console.log(`Received message: ${receivedMessage}`);
 
-  try {
-    // Firestoreで検索
-    const snapshot = await admin.firestore().collection('your-collection-name')
-      .where('message', '==', userMessage)  // 例えばユーザーが送信したメッセージで検索
-      .get();
+    // Firestoreの`message`コレクションを検索
+    const docRef = db.collection("message").doc(receivedMessage);
+    const doc = await docRef.get();
 
-    if (snapshot.empty) {
-      console.log('No matching documents.');
+    if (doc.exists) {
+      // ドキュメントが存在する場合、そのresponseを取得
+      const responseMessage = doc.data().response;
+      console.log(`Response found: ${responseMessage}`);
+
+      // LINEで返答を送信
       return client.replyMessage(event.replyToken, {
-        type: 'text',
-        text: 'No results found.',
+        type: "text",
+        text: responseMessage,
+      });
+    } else {
+      // ドキュメントが存在しない場合
+      console.log("No response found for the message.");
+      return client.replyMessage(event.replyToken, {
+        type: "text",
+        text: "すみません、そのメッセージには対応できません。",
       });
     }
-
-    // 結果が見つかった場合
-    snapshot.forEach(doc => {
-      console.log(doc.id, '=>', doc.data());
-
-      // FirestoreのデータをLINEメッセージとして返信
-      const replyText = `Found: ${doc.data().yourFieldName}`;
-      return client.replyMessage(event.replyToken, {
-        type: 'text',
-        text: replyText,
-      });
-    });
-
-  } catch (error) {
-    console.error("Error fetching data from Firestore:", error);
-    return client.replyMessage(event.replyToken, {
-      type: 'text',
-      text: 'An error occurred while processing your request.',
-    });
   }
 }
 // サーバー起動
