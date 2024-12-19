@@ -63,14 +63,12 @@ async function handleEvent(event) {
     const receivedMessage = event.message.text; // 受け取ったメッセージ（「こんにちは」など）
     console.log(`Received message: ${receivedMessage}`);
 
-    // Firestoreの`message`コレクションを検索（部分一致検索）
-    const querySnapshot = await db.collection("message")
-      .where("keywords", "array-contains", receivedMessage)  // "keywords"に部分一致する値を検索
-      .get();
+    // Firestoreの`message`コレクションを検索
+    const docRef = db.collection("message").doc(receivedMessage);
+    const doc = await docRef.get();
 
-    if (!querySnapshot.empty) {
-      // 部分一致するドキュメントがあれば、最初のマッチしたドキュメントのresponseを取得
-      const doc = querySnapshot.docs[0]; // 最初の一致するドキュメント
+    if (doc.exists) {
+      // ドキュメントが存在する場合、そのresponseを取得
       const responseMessage = doc.data().response;
       console.log(`Response found: ${responseMessage}`);
 
@@ -80,7 +78,7 @@ async function handleEvent(event) {
         text: responseMessage,
       });
     } else {
-      // 部分一致するドキュメントが見つからない場合
+      // ドキュメントが存在しない場合
       console.log("No response found for the message.");
       return client.replyMessage(event.replyToken, {
         type: "text",
@@ -89,7 +87,6 @@ async function handleEvent(event) {
     }
   }
 }
-
 // サーバー起動
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
