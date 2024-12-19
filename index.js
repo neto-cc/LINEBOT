@@ -30,6 +30,8 @@ admin.initializeApp({
   credential: admin.credential.cert(firebaseServiceAccount),
 });
 
+const db = admin.firestore();
+
 // LINEクライアントの作成
 const client = new Client(config);
 
