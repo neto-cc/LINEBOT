@@ -62,7 +62,7 @@ async function handleEvent(event) {
   try {
     // Firestoreで検索
     const snapshot = await admin.firestore().collection('your-collection-name')
-      .where('field-name', '==', userMessage)  // 例えばユーザーが送信したメッセージで検索
+      .where('message', '==', userMessage)  // 例えばユーザーが送信したメッセージで検索
       .get();
 
     if (snapshot.empty) {
