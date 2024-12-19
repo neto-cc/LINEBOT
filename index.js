@@ -57,10 +57,42 @@ app.post("/webhook", (req, res) => {
 
 // イベント処理関数
 async function handleEvent(event) {
-  // 上記コードと同様の処理を行います
-  // （詳細省略）
-}
+  const userMessage = event.message.text;  // LINEから送られてきたメッセージテキスト
 
+  try {
+    // Firestoreで検索
+    const snapshot = await admin.firestore().collection('your-collection-name')
+      .where('field-name', '==', userMessage)  // 例えばユーザーが送信したメッセージで検索
+      .get();
+
+    if (snapshot.empty) {
+      console.log('No matching documents.');
+      return client.replyMessage(event.replyToken, {
+        type: 'text',
+        text: 'No results found.',
+      });
+    }
+
+    // 結果が見つかった場合
+    snapshot.forEach(doc => {
+      console.log(doc.id, '=>', doc.data());
+
+      // FirestoreのデータをLINEメッセージとして返信
+      const replyText = `Found: ${doc.data().yourFieldName}`;
+      return client.replyMessage(event.replyToken, {
+        type: 'text',
+        text: replyText,
+      });
+    });
+
+  } catch (error) {
+    console.error("Error fetching data from Firestore:", error);
+    return client.replyMessage(event.replyToken, {
+      type: 'text',
+      text: 'An error occurred while processing your request.',
+    });
+  }
+}
 // サーバー起動
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
