@@ -12,7 +12,7 @@ const config = {
 };
 
 // Firebaseキーの読み込み
-const firebaseKeyPath = process.env.FIREBASE_KEY_PATH || "./secrets/firebase-key.json";
+const firebaseKeyPath = process.env.FIREBASE_KEY_PATH || "/etc/secrets/FIREBASE_KEY_PATH";
 let firebaseServiceAccount;
 
 try {
