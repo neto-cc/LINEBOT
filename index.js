@@ -93,7 +93,6 @@ async function handleEvent(event) {
               action: {
                 type: "message",
                 label: "役に立った",
-                text: "フィードバック:役に立った",
               },
             },
             {
@@ -101,7 +100,6 @@ async function handleEvent(event) {
               action: {
                 type: "message",
                 label: "役に立たなかった",
-                text: "フィードバック:役に立たなかった",
               },
             },
           ],
