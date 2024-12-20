@@ -57,22 +57,10 @@ app.post("/webhook", (req, res) => {
 
 // イベント処理関数
 async function handleEvent(event) {
+  // テキストメッセージの処理
   if (event.type === "message" && event.message.type === "text") {
     const receivedMessage = event.message.text;
     console.log(`Received message: ${receivedMessage}`);
-
-    // フィードバックメッセージの場合の処理
-    if (receivedMessage.startsWith("フィードバック:")) {
-      const feedback = receivedMessage.replace("フィードバック:", "");
-      await db.collection("feedback").add({
-        feedback,
-        timestamp: new Date(),
-      });
-      return client.replyMessage(event.replyToken, {
-        type: "text",
-        text: "ご協力ありがとうございます！",
-      });
-    }
 
     // 通常のメッセージ処理
     const docRef = db.collection("message").doc(receivedMessage);
@@ -91,15 +79,17 @@ async function handleEvent(event) {
             {
               type: "action",
               action: {
-                type: "message",
+                type: "postback", // postbackアクションに変更
                 label: "役に立った",
+                data: "feedback:役に立った", // フィードバックデータ
               },
             },
             {
               type: "action",
               action: {
-                type: "message",
+                type: "postback", // postbackアクションに変更
                 label: "役に立たなかった",
+                data: "feedback:役に立たなかった", // フィードバックデータ
               },
             },
           ],
@@ -110,6 +100,29 @@ async function handleEvent(event) {
       return client.replyMessage(event.replyToken, {
         type: "text",
         text: "すみません、そのメッセージには対応できません。",
+      });
+    }
+  }
+
+  // ポストバックイベントの処理
+  if (event.type === "postback") {
+    const postbackData = event.postback.data;
+
+    // フィードバックデータの処理
+    if (postbackData.startsWith("feedback:")) {
+      const feedback = postbackData.replace("feedback:", "");
+      console.log(`Feedback received: ${feedback}`);
+
+      // Firestoreに保存
+      await db.collection("feedback").add({
+        feedback,
+        timestamp: new Date(),
+      });
+
+      // フィードバックの応答
+      return client.replyMessage(event.replyToken, {
+        type: "text",
+        text: "ご協力ありがとうございます！",
       });
     }
   }
