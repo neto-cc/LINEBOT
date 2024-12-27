@@ -127,7 +127,7 @@ async function handleEvent(event) {
     }
   }
 }
-
+	
 // サーバー起動
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
