@@ -1,11 +1,8 @@
-﻿const express = require("express");
-const axios = require("axios");
-const admin = require("firebase-admin");
+const express = require("express");
 const { Client, middleware } = require("@line/bot-sdk");
 const fs = require("fs");
 require("dotenv").config();
 
-// アプリケーションのセットアップ
 const app = express();
 
 // LINE Messaging APIの設定
@@ -27,9 +24,11 @@ try {
 }
 
 // Firebase Admin SDKの初期化
+const admin = require("firebase-admin");
 admin.initializeApp({
   credential: admin.credential.cert(firebaseServiceAccount),
 });
+
 const db = admin.firestore();
 
 // LINEクライアントの作成
@@ -63,46 +62,46 @@ async function handleEvent(event) {
     const receivedMessage = event.message.text;
     console.log(`Received message: ${receivedMessage}`);
 
-    // Rasaでインテントを解析
-    const intent = await getRasaIntent(receivedMessage);
-    if (!intent) {
+    // 通常のメッセージ処理
+    const docRef = db.collection("message").doc(receivedMessage);
+    const doc = await docRef.get();
+
+    if (doc.exists) {
+      const responseMessage = doc.data().response;
+      console.log(`Response found: ${responseMessage}`);
+
+      // クイックリプライを含む応答メッセージ
       return client.replyMessage(event.replyToken, {
         type: "text",
-        text: "申し訳ありません。理解できませんでした。",
+        text: responseMessage,
+        quickReply: {
+          items: [
+            {
+              type: "action",
+              action: {
+                type: "postback", // postbackアクションに変更
+                label: "役に立った",
+                data: "feedback:役に立った", // フィードバックデータ
+              },
+            },
+            {
+              type: "action",
+              action: {
+                type: "postback", // postbackアクションに変更
+                label: "役に立たなかった",
+                data: "feedback:役に立たなかった", // フィードバックデータ
+              },
+            },
+          ],
+        },
+      });
+    } else {
+      console.log("No response found for the message.");
+      return client.replyMessage(event.replyToken, {
+        type: "text",
+        text: "すみません、そのメッセージには対応できません。",
       });
     }
-
-    // Firestoreからインテントに対応するレスポンスを取得
-    let responseMessage = await getFirestoreResponse(intent);
-    if (!responseMessage) {
-      responseMessage = "データが見つかりませんでした。";
-    }
-
-    // クイックリプライを含む応答メッセージ
-    return client.replyMessage(event.replyToken, {
-      type: "text",
-      text: responseMessage,
-      quickReply: {
-        items: [
-          {
-            type: "action",
-            action: {
-              type: "postback",
-              label: "役に立った",
-              data: "feedback:役に立った",
-            },
-          },
-          {
-            type: "action",
-            action: {
-              type: "postback",
-              label: "役に立たなかった",
-              data: "feedback:役に立たなかった",
-            },
-          },
-        ],
-      },
-    });
   }
 
   // ポストバックイベントの処理
@@ -128,40 +127,7 @@ async function handleEvent(event) {
     }
   }
 }
-
-// Rasaでメッセージを解析してインテントを取得
-async function getRasaIntent(message) {
-  try {
-    const response = await axios.post(
-      "http://localhost:5005/webhooks/rest/webhook",
-      { sender: "user", message: message },
-      { headers: { "Content-Type": "application/json" } }
-    );
-    if (response.status === 200 && response.data.length > 0 && response.data[0].intent) {
-      return response.data[0].intent.name;
-    }
-    return null;
-  } catch (error) {
-    console.error("Rasaとの通信エラー:", error);
-    return null;
-  }
-}
-
-// Firestoreからインテントに対応するレスポンスを取得
-async function getFirestoreResponse(intent) {
-  try {
-    const docRef = db.collection("message").doc(intent);
-    const doc = await docRef.get();
-    if (doc.exists) {
-      return doc.data().response || null;
-    }
-    return null;
-  } catch (error) {
-    console.error("Firestoreエラー:", error);
-    return null;
-  }
-}
-
+	
 // サーバー起動
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
