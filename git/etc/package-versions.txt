@@ -71,11 +71,11 @@ mingw-w64-x86_64-curl-winssl 8.11.0-2
 mingw-w64-x86_64-expat 2.6.4-1
 mingw-w64-x86_64-gcc-libs 14.2.0-2
 mingw-w64-x86_64-gettext-runtime 0.22.5-2
-mingw-w64-x86_64-git 2.47.1.1.2cd22437f6-1
-mingw-w64-x86_64-git-credential-manager 2.6.0-1
-mingw-w64-x86_64-git-doc-html 2.47.1.1.2cd22437f6-1
+mingw-w64-x86_64-git 2.47.1.2.36a139e995-1
+mingw-w64-x86_64-git-credential-manager 2.6.1-1
+mingw-w64-x86_64-git-doc-html 2.47.1.2.36a139e995-1
 mingw-w64-x86_64-git-extra 1.1.641.031e03baf-1
-mingw-w64-x86_64-git-lfs 3.6.0-1
+mingw-w64-x86_64-git-lfs 3.6.1-1
 mingw-w64-x86_64-gmp 6.3.0-2
 mingw-w64-x86_64-gnutls 3.8.4-1
 mingw-w64-x86_64-libffi 3.4.6-1
