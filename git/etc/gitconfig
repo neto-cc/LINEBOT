@@ -9,9 +9,9 @@
 	sslBackend = openssl
 	sslCAInfo = F:/line/Git/mingw64/etc/ssl/certs/ca-bundle.crt
 [core]
-	autocrlf = input
+	autocrlf = true
 	fscache = true
-	symlinks = false
+	symlinks = true
 [pull]
 	rebase = false
 [credential]
@@ -19,4 +19,4 @@
 [credential "https://dev.azure.com"]
 	useHttpPath = true
 [init]
-	defaultBranch = master
+	defaultBranch = main
