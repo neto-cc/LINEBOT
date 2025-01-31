@@ -12,12 +12,11 @@ const config = {
 };
 
 // Firebaseキーの読み込み
-const firebaseKeyJSON = process.env.FIREBASE_KEY_PATH;
-
+const firebaseKey = process.env.FIREBASE_KEY;
 let firebaseServiceAccount;
+
 try {
-  // 環境変数からJSONをパースしてFirebaseサービスアカウントを取得
-  firebaseServiceAccount = JSON.parse(firebaseKeyJSON);
+  firebaseServiceAccount = JSON.parse(firebaseKey); // 環境変数から取得したJSONを解析
   console.log("Firebase key loaded successfully.");
 } catch (error) {
   console.error("Failed to load Firebase key:", error);
