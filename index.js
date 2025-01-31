@@ -1,4 +1,5 @@
 const { Client, middleware } = require("@line/bot-sdk");
+const express = require("express");
 const fs = require("fs");
 require("dotenv").config();
 
@@ -76,27 +77,25 @@ async function handleEvent(event) {
         type: "text",
         text: responseMessage,
         quickReply: {
-          items: [
-            {
-              
-            {
-type: "action",
-              action: {
-                type: "postback", // postbackアクションに変更
-                label: "役に立った",
-                data: "feedback:役に立った", // フィードバックデータ
-              },
-            },
-            {
-              type: "action",
-              action: {
-                type: "postback", // postbackアクションに変更
-                label: "役に立たなかった",
-                data: "feedback:役に立たなかった", // フィードバックデータ
-              },
-            },
-          ],
-        },
+		  items: [
+		    {
+		      type: "action",
+		      action: {
+		        type: "postback", // postbackアクションに変更
+		        label: "役に立った",
+		        data: "feedback:役に立った", // フィードバックデータ
+		      },
+		    },
+		    {
+		      type: "action",
+		      action: {
+		        type: "postback", // postbackアクションに変更
+		        label: "役に立たなかった",
+		        data: "feedback:役に立たなかった", // フィードバックデータ
+		      },
+		    },
+		  ],
+		},
       });
     } else {
       console.log("No response found for the message.");
