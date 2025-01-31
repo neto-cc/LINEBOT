@@ -64,34 +64,40 @@ app.post("/webhook", async (req, res) => {
 
 // イベント処理関数
 async function handleEvent(event) {
-  if (event.type === "message" && event.message.type === "text") {
-    const receivedMessage = event.message.text;
-    console.log(`Received message: ${receivedMessage}`);
-
-    return client.replyMessage(event.replyToken, {
-      type: "text",
-      text: `あなたのメッセージ: ${receivedMessage}`,
-    });
-  }
-
-  // ポストバックイベントの処理
-  if (event.type === "postback") {
-    const postbackData = event.postback.data;
-
-    if (postbackData.startsWith("feedback:")) {
-      const feedback = postbackData.replace("feedback:", "");
-      console.log(`Feedback received: ${feedback}`);
-
-      await db.collection("feedback").add({
-        feedback,
-        timestamp: new Date(),
-      });
+  try {
+    if (event.type === "message" && event.message.type === "text") {
+      const receivedMessage = event.message.text;
+      console.log(`Received message: ${receivedMessage}`);
 
       return client.replyMessage(event.replyToken, {
         type: "text",
-        text: "ご協力ありがとうございます！",
+        text: `あなたのメッセージ: ${receivedMessage}`,
       });
     }
+
+    if (event.type === "postback") {
+      const postbackData = event.postback.data;
+
+      if (postbackData.startsWith("feedback:")) {
+        const feedback = postbackData.replace("feedback:", "");
+        console.log(`Feedback received: ${feedback}`);
+
+        await db.collection("feedback").add({
+          feedback,
+          timestamp: new Date(),
+        });
+
+        return client.replyMessage(event.replyToken, {
+          type: "text",
+          text: "ご協力ありがとうございます！",
+        });
+      }
+    }
+
+    return Promise.resolve(null); // 何もしない場合は `null` を返す
+  } catch (error) {
+    console.error("Error in handleEvent:", error);
+    return Promise.reject(error);
   }
 }
 
