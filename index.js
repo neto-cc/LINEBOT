@@ -1,29 +1,29 @@
-const { Client, middleware } = require("@line/bot-sdk");
+ï»¿const { Client, middleware } = require("@line/bot-sdk");
 const express = require("express");
 const fs = require("fs");
 require("dotenv").config();
 
 const app = express();
 
-// LINE Messaging API‚ÌÝ’è
+// LINE Messaging APIã®è¨­å®š
 const config = {
   channelSecret: process.env.CHANNEL_SECRET,
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
 };
 
-// FirebaseƒL[‚Ì“Ç‚Ýž‚Ý
+// Firebaseã‚­ãƒ¼ã®èª­ã¿è¾¼ã¿
 const firebaseKey = process.env.FIREBASE_KEY;
 let firebaseServiceAccount;
 
 try {
-  firebaseServiceAccount = JSON.parse(firebaseKey); // ŠÂ‹«•Ï”‚©‚çŽæ“¾‚µ‚½JSON‚ð‰ðÍ
+  firebaseServiceAccount = JSON.parse(firebaseKey); // ç’°å¢ƒå¤‰æ•°ã‹ã‚‰å–å¾—ã—ãŸJSONã‚’è§£æž
   console.log("Firebase key loaded successfully.");
 } catch (error) {
   console.error("Failed to load Firebase key:", error);
   process.exit(1);
 }
 
-// Firebase Admin SDK‚Ì‰Šú‰»
+// Firebase Admin SDKã®åˆæœŸåŒ–
 const admin = require("firebase-admin");
 admin.initializeApp({
   credential: admin.credential.cert(firebaseServiceAccount),
@@ -31,19 +31,19 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
-// LINEƒNƒ‰ƒCƒAƒ“ƒg‚Ìì¬
+// LINEã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã®ä½œæˆ
 const client = new Client(config);
 
-// Content-Typeƒwƒbƒ_[‚ðÝ’è
+// Content-Typeãƒ˜ãƒƒãƒ€ãƒ¼ã‚’è¨­å®š
 app.use((req, res, next) => {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   next();
 });
 
-// middleware‚Ì“K—p
+// middlewareã®é©ç”¨
 app.use(middleware(config));
 
-// WebhookƒGƒ“ƒhƒ|ƒCƒ“ƒg
+// Webhookã‚¨ãƒ³ãƒ‰ãƒã‚¤ãƒ³ãƒˆ
 app.post("/webhook", (req, res) => {
   console.log("Received webhook event:", JSON.stringify(req.body, null, 2));
 
@@ -55,14 +55,14 @@ app.post("/webhook", (req, res) => {
     });
 });
 
-// ƒCƒxƒ“ƒgˆ—ŠÖ”
+// ã‚¤ãƒ™ãƒ³ãƒˆå‡¦ç†é–¢æ•°
 async function handleEvent(event) {
-  // ƒeƒLƒXƒgƒƒbƒZ[ƒW‚Ìˆ—
+  // ãƒ†ã‚­ã‚¹ãƒˆãƒ¡ãƒƒã‚»ãƒ¼ã‚¸ã®å‡¦ç†
   if (event.type === "message" && event.message.type === "text") {
     const receivedMessage = event.message.text;
-    console.log(`ŽóM‚µ‚½ ƒƒbƒZ[ƒW: ${receivedMessage}`);
+    console.log(`å—ä¿¡ã—ãŸ ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸: ${receivedMessage}`);
 
-    // ’Êí‚ÌƒƒbƒZ[ƒWˆ—
+    // é€šå¸¸ã®ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸å‡¦ç†
     const docRef = db.collection("message").doc(receivedMessage);
     const doc = await docRef.get();
 
@@ -70,7 +70,7 @@ async function handleEvent(event) {
       const responseMessage = doc.data().response;
       console.log(`Response found: ${responseMessage}`);
 
-      // ƒNƒCƒbƒNƒŠƒvƒ‰ƒC‚ðŠÜ‚Þ‰ž“šƒƒbƒZ[ƒW
+      // ã‚¯ã‚¤ãƒƒã‚¯ãƒªãƒ—ãƒ©ã‚¤ã‚’å«ã‚€å¿œç­”ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸
       return client.replyMessage(event.replyToken, {
         type: "text",
         text: responseMessage,
@@ -79,17 +79,17 @@ async function handleEvent(event) {
             {
               type: "action",
               action: {
-                type: "postback", // postbackƒAƒNƒVƒ‡ƒ“‚É•ÏX
-                label: "–ð‚É—§‚Á‚½",
-                data: "feedback:–ð‚É—§‚Á‚½", // ƒtƒB[ƒhƒoƒbƒNƒf[ƒ^
+                type: "postback", // postbackã‚¢ã‚¯ã‚·ãƒ§ãƒ³ã«å¤‰æ›´
+                label: "å½¹ã«ç«‹ã£ãŸ",
+                data: "feedback:å½¹ã«ç«‹ã£ãŸ", // ãƒ•ã‚£ãƒ¼ãƒ‰ãƒãƒƒã‚¯ãƒ‡ãƒ¼ã‚¿
               },
             },
             {
               type: "action",
               action: {
-                type: "postback", // postbackƒAƒNƒVƒ‡ƒ“‚É•ÏX
-                label: "–ð‚É—§‚½‚È‚©‚Á‚½",
-                data: "feedback:–ð‚É—§‚½‚È‚©‚Á‚½", // ƒtƒB[ƒhƒoƒbƒNƒf[ƒ^
+                type: "postback", // postbackã‚¢ã‚¯ã‚·ãƒ§ãƒ³ã«å¤‰æ›´
+                label: "å½¹ã«ç«‹ãŸãªã‹ã£ãŸ",
+                data: "feedback:å½¹ã«ç«‹ãŸãªã‹ã£ãŸ", // ãƒ•ã‚£ãƒ¼ãƒ‰ãƒãƒƒã‚¯ãƒ‡ãƒ¼ã‚¿
               },
             },
           ],
@@ -99,36 +99,36 @@ async function handleEvent(event) {
       console.log("No response found for the message.");
       return client.replyMessage(event.replyToken, {
         type: "text",
-        text: "‚·‚Ý‚Ü‚¹‚ñA‚»‚ÌƒƒbƒZ[ƒW‚É‚Í‘Î‰ž‚Å‚«‚Ü‚¹‚ñB",
+        text: "ã™ã¿ã¾ã›ã‚“ã€ãã®ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸ã«ã¯å¯¾å¿œã§ãã¾ã›ã‚“ã€‚",
       });
     }
   }
 
-  // ƒ|ƒXƒgƒoƒbƒNƒCƒxƒ“ƒg‚Ìˆ—
+  // ãƒã‚¹ãƒˆãƒãƒƒã‚¯ã‚¤ãƒ™ãƒ³ãƒˆã®å‡¦ç†
   if (event.type === "postback") {
     const postbackData = event.postback.data;
 
-    // ƒtƒB[ƒhƒoƒbƒNƒf[ƒ^‚Ìˆ—
+    // ãƒ•ã‚£ãƒ¼ãƒ‰ãƒãƒƒã‚¯ãƒ‡ãƒ¼ã‚¿ã®å‡¦ç†
     if (postbackData.startsWith("feedback:")) {
       const feedback = postbackData.replace("feedback:", "");
       console.log(`Feedback received: ${feedback}`);
 
-      // Firestore‚É•Û‘¶
+      // Firestoreã«ä¿å­˜
       await db.collection("feedback").add({
         feedback,
         timestamp: new Date(),
       });
 
-      // ƒtƒB[ƒhƒoƒbƒN‚Ì‰ž“š
+      // ãƒ•ã‚£ãƒ¼ãƒ‰ãƒãƒƒã‚¯ã®å¿œç­”
       return client.replyMessage(event.replyToken, {
         type: "text",
-        text: "‚²‹¦—Í‚ ‚è‚ª‚Æ‚¤‚²‚´‚¢‚Ü‚·I",
+        text: "ã”å”åŠ›ã‚ã‚ŠãŒã¨ã†ã”ã–ã„ã¾ã™ï¼",
       });
     }
   }
 }
 
-// ƒT[ƒo[‹N“®
+// ã‚µãƒ¼ãƒãƒ¼èµ·å‹•
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
