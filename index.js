@@ -56,10 +56,12 @@ app.post("/webhook", (req, res) => {
 
 // イベント処理関数
 async function handleEvent(event) {
-  // テキストメッセージの処理
+  
+  
+// テキストメッセージの処理
   if (event.type === "message" && event.message.type === "text") {
     const receivedMessage = event.message.text;
-    console.log(Received message: ${receivedMessage});
+    console.log(`受信した メッセージ: ${receivedMessage}`);
 
     // 通常のメッセージ処理
     const docRef = db.collection("message").doc(receivedMessage);
@@ -67,7 +69,7 @@ async function handleEvent(event) {
 
     if (doc.exists) {
       const responseMessage = doc.data().response;
-      console.log(Response found: ${responseMessage});
+      console.log(`Response found: ${responseMessage}`);
 
       // クイックリプライを含む応答メッセージ
       return client.replyMessage(event.replyToken, {
@@ -76,7 +78,9 @@ async function handleEvent(event) {
         quickReply: {
           items: [
             {
-              type: "action",
+              
+            {
+type: "action",
               action: {
                 type: "postback", // postbackアクションに変更
                 label: "役に立った",
@@ -110,7 +114,7 @@ async function handleEvent(event) {
     // フィードバックデータの処理
     if (postbackData.startsWith("feedback:")) {
       const feedback = postbackData.replace("feedback:", "");
-      console.log(Feedback received: ${feedback});
+      console.log(`Feedback received: ${feedback}`);
 
       // Firestoreに保存
       await db.collection("feedback").add({
@@ -126,9 +130,9 @@ async function handleEvent(event) {
     }
   }
 }
-	
+
 // サーバー起動
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(Server is running on port ${PORT});
+  console.log(`Server is running on port ${PORT}`);
 });
