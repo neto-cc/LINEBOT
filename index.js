@@ -1,8 +1,6 @@
-const express = require("express");
 const { Client, middleware } = require("@line/bot-sdk");
 const fs = require("fs");
 require("dotenv").config();
-const cors = require("cors");
 
 const app = express();
 
@@ -12,26 +10,15 @@ const config = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
 };
 
-// 環境変数のチェック
-if (!config.channelSecret || !config.channelAccessToken) {
-  console.error("? LINE APIの環境変数が不足しています。");
-  process.exit(1);
-}
-
 // Firebaseキーの読み込み
 const firebaseKeyPath = process.env.FIREBASE_KEY_PATH || "/etc/secrets/FIREBASE_KEY_PATH";
 let firebaseServiceAccount;
 
-if (fs.existsSync(firebaseKeyPath)) {
-  try {
-    firebaseServiceAccount = JSON.parse(fs.readFileSync(firebaseKeyPath, "utf-8"));
-    console.log("? Firebaseキーの読み込みに成功しました。");
-  } catch (error) {
-    console.error("? Firebaseキーの読み込みに失敗しました:", error);
-    process.exit(1);
-  }
-} else {
-  console.error("? Firebaseキーのパスが正しくありません:", firebaseKeyPath);
+try {
+  firebaseServiceAccount = JSON.parse(fs.readFileSync(firebaseKeyPath, "utf-8"));
+  console.log("Firebase key loaded successfully.");
+} catch (error) {
+  console.error("Failed to load Firebase key:", error);
   process.exit(1);
 }
 
@@ -46,78 +33,102 @@ const db = admin.firestore();
 // LINEクライアントの作成
 const client = new Client(config);
 
-// CORS設定
-app.use(cors());
-
-// middlewareの適用
-app.use(express.json());
-app.use(middleware(config));
-
-// ルートエンドポイント
-app.get("/", (req, res) => {
-  res.send("? LINE Bot サーバーが正常に動作しています。");
+// Content-Typeヘッダーを設定
+app.use((req, res, next) => {
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  next();
 });
 
+// middlewareの適用
+app.use(middleware(config));
+
 // Webhookエンドポイント
-app.post("/webhook", async (req, res) => {
-  console.log("?? Webhookイベントを受信:", JSON.stringify(req.body, null, 2));
+app.post("/webhook", (req, res) => {
+  console.log("Received webhook event:", JSON.stringify(req.body, null, 2));
 
-  if (!req.body.events || req.body.events.length === 0) {
-    return res.status(400).send({ message: "? イベントがありません。" });
-  }
-
-  try {
-    const results = await Promise.all(req.body.events.map(handleEvent));
-    console.log("? Webhookイベント処理完了:", results);
-    res.json(results);
-  } catch (err) {
-    console.error("? Webhookイベント処理中にエラー発生:", err);
-    res.status(500).send({ error: "Webhookイベントの処理に失敗しました", details: err.message });
-  }
+  Promise.all(req.body.events.map(handleEvent))
+    .then((result) => res.json(result))
+    .catch((err) => {
+      console.error("Error processing event:", err);
+      res.status(500).end();
+    });
 });
 
 // イベント処理関数
 async function handleEvent(event) {
-  try {
-    console.log(`?? イベントタイプ: ${event.type}`);
+  // テキストメッセージの処理
+  if (event.type === "message" && event.message.type === "text") {
+    const receivedMessage = event.message.text;
+    console.log(Received message: ${receivedMessage});
 
-    if (event.type === "message" && event.message.type === "text") {
-      const receivedMessage = event.message.text;
-      console.log(`?? 受信メッセージ: ${receivedMessage}`);
+    // 通常のメッセージ処理
+    const docRef = db.collection("message").doc(receivedMessage);
+    const doc = await docRef.get();
 
+    if (doc.exists) {
+      const responseMessage = doc.data().response;
+      console.log(Response found: ${responseMessage});
+
+      // クイックリプライを含む応答メッセージ
       return client.replyMessage(event.replyToken, {
         type: "text",
-        text: `あなたのメッセージ: ${receivedMessage}`,
+        text: responseMessage,
+        quickReply: {
+          items: [
+            {
+              type: "action",
+              action: {
+                type: "postback", // postbackアクションに変更
+                label: "役に立った",
+                data: "feedback:役に立った", // フィードバックデータ
+              },
+            },
+            {
+              type: "action",
+              action: {
+                type: "postback", // postbackアクションに変更
+                label: "役に立たなかった",
+                data: "feedback:役に立たなかった", // フィードバックデータ
+              },
+            },
+          ],
+        },
+      });
+    } else {
+      console.log("No response found for the message.");
+      return client.replyMessage(event.replyToken, {
+        type: "text",
+        text: "すみません、そのメッセージには対応できません。",
       });
     }
+  }
 
-    if (event.type === "postback") {
-      const postbackData = event.postback.data;
+  // ポストバックイベントの処理
+  if (event.type === "postback") {
+    const postbackData = event.postback.data;
 
-      if (postbackData.startsWith("feedback:")) {
-        const feedback = postbackData.replace("feedback:", "");
-        console.log(`?? フィードバック受信: ${feedback}`);
+    // フィードバックデータの処理
+    if (postbackData.startsWith("feedback:")) {
+      const feedback = postbackData.replace("feedback:", "");
+      console.log(Feedback received: ${feedback});
 
-        await db.collection("feedback").add({
-          feedback,
-          timestamp: new Date(),
-        });
+      // Firestoreに保存
+      await db.collection("feedback").add({
+        feedback,
+        timestamp: new Date(),
+      });
 
-        return client.replyMessage(event.replyToken, {
-          type: "text",
-          text: "?? フィードバックありがとうございます！",
-        });
-      }
+      // フィードバックの応答
+      return client.replyMessage(event.replyToken, {
+        type: "text",
+        text: "ご協力ありがとうございます！",
+      });
     }
-
-    return null;
-  } catch (error) {
-    console.error("? handleEventでエラー発生:", error);
-    return Promise.reject(error);
   }
 }
-
+	
 // サーバー起動
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`?? サーバーがポート ${PORT} で起動しました。`);
+  console.log(Server is running on port ${PORT});
+});
