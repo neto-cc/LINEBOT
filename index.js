@@ -1,6 +1,5 @@
 ﻿const { Client, middleware } = require("@line/bot-sdk");
 const express = require("express");
-const fs = require("fs");
 require("dotenv").config();
 
 const app = express();
@@ -16,7 +15,7 @@ const firebaseKey = process.env.FIREBASE_KEY;
 let firebaseServiceAccount;
 
 try {
-  firebaseServiceAccount = JSON.parse(firebaseKey); // 環境変数から取得したJSONを解析
+  firebaseServiceAccount = JSON.parse(firebaseKey);
   console.log("Firebase key loaded successfully.");
 } catch (error) {
   console.error("Failed to load Firebase key:", error);
@@ -57,44 +56,30 @@ app.post("/webhook", (req, res) => {
 
 // イベント処理関数
 async function handleEvent(event) {
-  // テキストメッセージの処理
   if (event.type === "message" && event.message.type === "text") {
     const receivedMessage = event.message.text;
-    console.log(`受信した メッセージ: ${receivedMessage}`);
+    console.log(`受信したメッセージ: ${receivedMessage}`);
 
-    // 通常のメッセージ処理
     const docRef = db.collection("message").doc(receivedMessage);
     const doc = await docRef.get();
 
     if (doc.exists) {
       const responseMessage = doc.data().response;
-      console.log(`Response found: ${responseMessage}`);
 
-      // クイックリプライを含む応答メッセージ
-      return client.replyMessage(event.replyToken, {
-        type: "text",
-        text: responseMessage,
-        quickReply: {
-          items: [
-            {
-              type: "action",
-              action: {
-                type: "postback", // postbackアクションに変更
-                label: "役に立った",
-                data: "feedback:役に立った", // フィードバックデータ
-              },
-            },
-            {
-              type: "action",
-              action: {
-                type: "postback", // postbackアクションに変更
-                label: "役に立たなかった",
-                data: "feedback:役に立たなかった", // フィードバックデータ
-              },
-            },
-          ],
-        },
-      });
+      if (responseMessage.startsWith("http")) {
+        // 画像URLの場合、画像メッセージを送信
+        return client.replyMessage(event.replyToken, {
+          type: "image",
+          originalContentUrl: responseMessage,
+          previewImageUrl: responseMessage,
+        });
+      } else {
+        // 通常のテキストメッセージ
+        return client.replyMessage(event.replyToken, {
+          type: "text",
+          text: responseMessage,
+        });
+      }
     } else {
       console.log("No response found for the message.");
       return client.replyMessage(event.replyToken, {
@@ -108,18 +93,15 @@ async function handleEvent(event) {
   if (event.type === "postback") {
     const postbackData = event.postback.data;
 
-    // フィードバックデータの処理
     if (postbackData.startsWith("feedback:")) {
       const feedback = postbackData.replace("feedback:", "");
       console.log(`Feedback received: ${feedback}`);
 
-      // Firestoreに保存
       await db.collection("feedback").add({
         feedback,
         timestamp: new Date(),
       });
 
-      // フィードバックの応答
       return client.replyMessage(event.replyToken, {
         type: "text",
         text: "ご協力ありがとうございます！",
