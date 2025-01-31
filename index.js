@@ -1,7 +1,6 @@
 const express = require("express");
 const { Client, middleware } = require("@line/bot-sdk");
 const fs = require("fs");
-const axios = require("axios");
 require("dotenv").config();
 const cors = require("cors");
 
@@ -42,21 +41,12 @@ const db = admin.firestore();
 // LINEクライアントの作成
 const client = new Client(config);
 
-// Content-Typeヘッダーを設定
-app.use((req, res, next) => {
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
-  next();
-});
-
 // CORS設定
 app.use(cors());
 
 // middlewareの適用
 app.use(express.json());
 app.use(middleware(config));
-
-// Rasaのエンドポイント
-const RASA_URL = "https://rasa-vt1z.onrender.com/webhook";  // RasaサーバーのURL
 
 // Webhookエンドポイント
 app.post("/webhook", async (req, res) => {
@@ -78,38 +68,13 @@ async function handleEvent(event) {
     const receivedMessage = event.message.text;
     console.log(`Received message: ${receivedMessage}`);
 
-    try {
-      // Rasaにメッセージを送信
-      const rasaResponse = await axios.post(RASA_URL, {
-        sender: event.source.userId,  // ユーザーのIDをRasaのsender_idとして送信
-        message: receivedMessage,
-      });
-
-      console.log("Rasa response:", rasaResponse.data);
-
-      // Rasaからの応答をLINEメッセージとして送信
-      if (rasaResponse.data.length > 0) {
-        const responseMessage = rasaResponse.data[0].text; // 最初のメッセージを取得
-        return client.replyMessage(event.replyToken, {
-          type: "text",
-          text: responseMessage,
-        });
-      } else {
-        return client.replyMessage(event.replyToken, {
-          type: "text",
-          text: "すみません、理解できませんでした。",
-        });
-      }
-    } catch (error) {
-      console.error("Error sending message to Rasa:", error);
-      return client.replyMessage(event.replyToken, {
-        type: "text",
-        text: "エラーが発生しました。",
-      });
-    }
+    return client.replyMessage(event.replyToken, {
+      type: "text",
+      text: `あなたのメッセージ: ${receivedMessage}`,
+    });
   }
 
-  // ポストバックイベントの処理（省略せずそのまま利用）
+  // ポストバックイベントの処理
   if (event.type === "postback") {
     const postbackData = event.postback.data;
 
