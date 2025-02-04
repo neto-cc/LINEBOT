@@ -10,8 +10,8 @@ const db = admin.firestore();
 
 // LINEの設定
 const config = {
-  channelAccessToken: "YOUR_CHANNEL_ACCESS_TOKEN",
-  channelSecret: "YOUR_CHANNEL_SECRET",
+  channelAccessToken: "CHANNEL_ACCESS_TOKEN",
+  channelSecret: "CHANNEL_SECRET",
 };
 
 // LINEクライアント
