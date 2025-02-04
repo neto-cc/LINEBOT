@@ -11,7 +11,7 @@ const config = {
 };
 
 // Firebaseキーの読み込み
-const firebaseKey = process.env.FIREBASE_KEY;
+const firebaseKey = process.env.FIREBASE_KEY_PATH;
 let firebaseServiceAccount;
 
 try {
