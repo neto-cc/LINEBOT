@@ -1,15 +1,15 @@
 ﻿require("dotenv").config();
 const path = require("path");
-const admin = require("firebase-admin");
 const express = require("express");
 const line = require("@line/bot-sdk");
 
-// `.env` の環境変数から Firebase の秘密鍵のパスを取得
-const keyPath = process.env.FIREBASE_KEY;
-if (!keyPath) {
-  console.error("環境変数 FIREBASE_KEY_PATH が設定されていません。");
-  process.exit(1);
-}
+const admin = require("firebase-admin");
+
+const serviceAccount = JSON.parse(Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS, 'base64').toString('utf8'));
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 
 // Firebase の初期化
 admin.initializeApp({
