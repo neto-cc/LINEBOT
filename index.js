@@ -13,7 +13,7 @@ if (!keyPath) {
 
 // Firebase の初期化
 admin.initializeApp({
-  credential: admin.credential.cert(require(path.resolve(keyPath))),
+  credential: admin.credential.cert(F:/line/etc/secrets/firebase-key.json),
 });
 const db = admin.firestore();
 
