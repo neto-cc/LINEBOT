@@ -1,23 +1,29 @@
-﻿const line = require("@line/bot-sdk");
+﻿require("dotenv").config();
+const path = require("path");
 const admin = require("firebase-admin");
 const express = require("express");
+const line = require("@line/bot-sdk");
 
-// Firebaseの初期化
+// `.env` の環境変数から Firebase の秘密鍵のパスを取得
+const keyPath = process.env.FIREBASE_KEY_PATH;
+if (!keyPath) {
+  console.error("環境変数 FIREBASE_KEY_PATH が設定されていません。");
+  process.exit(1);
+}
+
+// Firebase の初期化
 admin.initializeApp({
-  credential: admin.credential.applicationDefault(),
+  credential: admin.credential.cert(require(path.resolve(keyPath))),
 });
 const db = admin.firestore();
 
 // LINEの設定
 const config = {
-  channelAccessToken: "CHANNEL_ACCESS_TOKEN",
-  channelSecret: "CHANNEL_SECRET",
+  channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
+  channelSecret: process.env.CHANNEL_SECRET,
 };
 
-// LINEクライアント
 const client = new line.Client(config);
-
-// Expressアプリ
 const app = express();
 app.use(express.json());
 
@@ -35,14 +41,12 @@ app.post("/webhook", async (req, res) => {
   }
 });
 
-// イベント処理
 async function handleEvent(event) {
   console.log("Processing event:", JSON.stringify(event, null, 2));
 
   if (event.type === "message" && event.message.type === "text") {
     return handleMessageEvent(event);
   }
-
   if (event.type === "postback") {
     return handlePostbackEvent(event);
   }
@@ -50,7 +54,6 @@ async function handleEvent(event) {
   return Promise.resolve(null);
 }
 
-// メッセージイベント処理
 async function handleMessageEvent(event) {
   const receivedMessage = event.message.text;
   console.log(`受信したメッセージ: ${receivedMessage}`);
@@ -61,7 +64,6 @@ async function handleMessageEvent(event) {
   if (doc.exists) {
     const responseMessage = doc.data().response;
 
-    // 返信とフィードバックボタン
     return client.replyMessage(event.replyToken, {
       type: "text",
       text: responseMessage,
@@ -95,7 +97,6 @@ async function handleMessageEvent(event) {
   }
 }
 
-// Postbackイベント処理（フィードバック保存）
 async function handlePostbackEvent(event) {
   const postbackData = event.postback.data;
   console.log("Postback data received:", postbackData);
@@ -126,7 +127,6 @@ async function handlePostbackEvent(event) {
   }
 }
 
-// サーバー起動
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
