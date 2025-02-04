@@ -1,132 +1,133 @@
-﻿const { Client, middleware } = require("@line/bot-sdk");
-const express = require("express");
-require("dotenv").config();
-
-const app = express();
-
-// LINE Messaging APIの設定
-const config = {
-  channelSecret: process.env.CHANNEL_SECRET,
-  channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
-};
-
-// Firebaseキーの読み込み
-const firebaseKey = process.env.FIREBASE_KEY;
-let firebaseServiceAccount;
-
-try {
-  firebaseServiceAccount = JSON.parse(firebaseKey);
-  console.log("Firebase key loaded successfully.");
-} catch (error) {
-  console.error("Failed to load Firebase key:", error);
-  process.exit(1);
-}
-
-// Firebase Admin SDKの初期化
+﻿const line = require("@line/bot-sdk");
 const admin = require("firebase-admin");
-admin.initializeApp({
-  credential: admin.credential.cert(firebaseServiceAccount),
-});
+const express = require("express");
 
+// Firebaseの初期化
+admin.initializeApp({
+  credential: admin.credential.applicationDefault(),
+});
 const db = admin.firestore();
 
-// LINEクライアントの作成
-const client = new Client(config);
+// LINEの設定
+const config = {
+  channelAccessToken: "YOUR_CHANNEL_ACCESS_TOKEN",
+  channelSecret: "YOUR_CHANNEL_SECRET",
+};
 
-// Content-Typeヘッダーを設定
-app.use((req, res, next) => {
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
-  next();
+// LINEクライアント
+const client = new line.Client(config);
+
+// Expressアプリ
+const app = express();
+app.use(express.json());
+
+// LINE Webhookエンドポイント
+app.post("/webhook", async (req, res) => {
+  try {
+    const events = req.body.events;
+    console.log("Received events:", JSON.stringify(events, null, 2));
+
+    const results = await Promise.all(events.map(handleEvent));
+    res.json(results);
+  } catch (error) {
+    console.error("Error processing webhook:", error);
+    res.status(500).end();
+  }
 });
 
-// middlewareの適用
-app.use(middleware(config));
-
-// Webhookエンドポイント
-app.post("/webhook", (req, res) => {
-  console.log("Received webhook event:", JSON.stringify(req.body, null, 2));
-
-  Promise.all(req.body.events.map(handleEvent))
-    .then((result) => res.json(result))
-    .catch((err) => {
-      console.error("Error processing event:", err);
-      res.status(500).end();
-    });
-});
-
-// イベント処理関数
+// イベント処理
 async function handleEvent(event) {
   console.log("Processing event:", JSON.stringify(event, null, 2));
 
   if (event.type === "message" && event.message.type === "text") {
-    const receivedMessage = event.message.text;
-    console.log(`受信したメッセージ: ${receivedMessage}`);
+    return handleMessageEvent(event);
+  }
 
-    const docRef = db.collection("message").doc(receivedMessage);
-    const doc = await docRef.get();
+  if (event.type === "postback") {
+    return handlePostbackEvent(event);
+  }
 
-    if (doc.exists) {
-      const responseMessage = doc.data().response;
+  return Promise.resolve(null);
+}
 
-      if (responseMessage.startsWith("http")) {
-        console.log("Sending image response:", responseMessage);
-        return client.replyMessage(event.replyToken, {
-          type: "image",
-          originalContentUrl: responseMessage,
-          previewImageUrl: responseMessage,
-        });
-      } else {
-        console.log("Sending text response:", responseMessage);
-        return client.replyMessage(event.replyToken, {
-          type: "text",
-          text: responseMessage,
-        });
-      }
-    } else {
-      console.log("No response found for the message.");
+// メッセージイベント処理
+async function handleMessageEvent(event) {
+  const receivedMessage = event.message.text;
+  console.log(`受信したメッセージ: ${receivedMessage}`);
+
+  const docRef = db.collection("message").doc(receivedMessage);
+  const doc = await docRef.get();
+
+  if (doc.exists) {
+    const responseMessage = doc.data().response;
+
+    // 返信とフィードバックボタン
+    return client.replyMessage(event.replyToken, {
+      type: "text",
+      text: responseMessage,
+      quickReply: {
+        items: [
+          {
+            type: "action",
+            action: {
+              type: "postback",
+              label: "役に立った",
+              data: `feedback:役に立った|${receivedMessage}`,
+            },
+          },
+          {
+            type: "action",
+            action: {
+              type: "postback",
+              label: "役に立たなかった",
+              data: `feedback:役に立たなかった|${receivedMessage}`,
+            },
+          },
+        ],
+      },
+    });
+  } else {
+    console.log("No response found for the message.");
+    return client.replyMessage(event.replyToken, {
+      type: "text",
+      text: "すみません、そのメッセージには対応できません。",
+    });
+  }
+}
+
+// Postbackイベント処理（フィードバック保存）
+async function handlePostbackEvent(event) {
+  const postbackData = event.postback.data;
+  console.log("Postback data received:", postbackData);
+
+  if (postbackData.startsWith("feedback:")) {
+    const [_, feedback, message] = postbackData.split("|");
+    console.log(`Feedback received: ${feedback} for message: ${message}`);
+
+    try {
+      const feedbackDocRef = await db.collection("feedback").add({
+        feedback,
+        message,
+        timestamp: new Date(),
+      });
+      console.log("Feedback successfully saved to Firestore:", feedbackDocRef.id);
+
       return client.replyMessage(event.replyToken, {
         type: "text",
-        text: "すみません、そのメッセージには対応できません。",
+        text: "ご協力ありがとうございます！",
+      });
+    } catch (error) {
+      console.error("Failed to save feedback:", error);
+      return client.replyMessage(event.replyToken, {
+        type: "text",
+        text: "フィードバックの保存に失敗しました。",
       });
     }
   }
-
-  // ポストバックイベントの処理
-  if (event.type === "postback") {
-    const postbackData = event.postback.data;
-    console.log("Postback data received:", postbackData);
-
-    if (postbackData.startsWith("feedback:")) {
-      const feedback = postbackData.replace("feedback:", "");
-      console.log(`Feedback received: ${feedback}`);
-
-      try {
-        await db.collection("feedback").add({
-          feedback,
-          timestamp: new Date(),
-        });
-        console.log("Feedback successfully saved to Firestore.");
-
-        console.log("Replying to feedback postback...");
-        return client.replyMessage(event.replyToken, {
-          type: "text",
-          text: "ご協力ありがとうございます！",
-        });
-      } catch (error) {
-        console.error("Failed to save feedback:", error);
-        return client.replyMessage(event.replyToken, {
-          type: "text",
-          text: "フィードバックの保存に失敗しました。",
-        });
-      }
-    }
-  }
-
-  console.log("Unhandled event type:", event.type);
 }
 
 // サーバー起動
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
