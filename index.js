@@ -56,6 +56,8 @@ app.post("/webhook", (req, res) => {
 
 // イベント処理関数
 async function handleEvent(event) {
+  console.log("Processing event:", JSON.stringify(event, null, 2));
+
   if (event.type === "message" && event.message.type === "text") {
     const receivedMessage = event.message.text;
     console.log(`受信したメッセージ: ${receivedMessage}`);
@@ -67,14 +69,14 @@ async function handleEvent(event) {
       const responseMessage = doc.data().response;
 
       if (responseMessage.startsWith("http")) {
-        // 画像URLの場合、画像メッセージを送信
+        console.log("Sending image response:", responseMessage);
         return client.replyMessage(event.replyToken, {
           type: "image",
           originalContentUrl: responseMessage,
           previewImageUrl: responseMessage,
         });
       } else {
-        // 通常のテキストメッセージ
+        console.log("Sending text response:", responseMessage);
         return client.replyMessage(event.replyToken, {
           type: "text",
           text: responseMessage,
@@ -92,22 +94,35 @@ async function handleEvent(event) {
   // ポストバックイベントの処理
   if (event.type === "postback") {
     const postbackData = event.postback.data;
+    console.log("Postback data received:", postbackData);
 
     if (postbackData.startsWith("feedback:")) {
       const feedback = postbackData.replace("feedback:", "");
       console.log(`Feedback received: ${feedback}`);
 
-      await db.collection("feedback").add({
-        feedback,
-        timestamp: new Date(),
-      });
+      try {
+        await db.collection("feedback").add({
+          feedback,
+          timestamp: new Date(),
+        });
+        console.log("Feedback successfully saved to Firestore.");
 
-      return client.replyMessage(event.replyToken, {
-        type: "text",
-        text: "ご協力ありがとうございます！",
-      });
+        console.log("Replying to feedback postback...");
+        return client.replyMessage(event.replyToken, {
+          type: "text",
+          text: "ご協力ありがとうございます！",
+        });
+      } catch (error) {
+        console.error("Failed to save feedback:", error);
+        return client.replyMessage(event.replyToken, {
+          type: "text",
+          text: "フィードバックの保存に失敗しました。",
+        });
+      }
     }
   }
+
+  console.log("Unhandled event type:", event.type);
 }
 
 // サーバー起動
