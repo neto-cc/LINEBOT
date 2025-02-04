@@ -5,7 +5,7 @@ const express = require("express");
 const line = require("@line/bot-sdk");
 
 // `.env` の環境変数から Firebase の秘密鍵のパスを取得
-const keyPath = process.env.FIREBASE_KEY_PATH;
+const keyPath = process.env.FIREBASE_KEY;
 if (!keyPath) {
   console.error("環境変数 FIREBASE_KEY_PATH が設定されていません。");
   process.exit(1);
@@ -13,7 +13,7 @@ if (!keyPath) {
 
 // Firebase の初期化
 admin.initializeApp({
-  credential: admin.credential.cert(F:/line/etc/secrets/firebase-key.json),
+  credential: admin.credential.cert(path.resolve(keyPath)),
 });
 const db = admin.firestore();
 
