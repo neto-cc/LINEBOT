@@ -1,19 +1,17 @@
 ﻿require("dotenv").config();
+const fs = require("fs");
 const path = require("path");
 const express = require("express");
 const line = require("@line/bot-sdk");
-
 const admin = require("firebase-admin");
 
-const serviceAccount = JSON.parse(Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS, 'base64').toString('utf8'));
+// Firebaseキーのパスを環境変数から取得
+const keyPath = process.env.FIREBASE_KEY_PATH;
 
+// Firebaseの初期化
+const serviceAccount = JSON.parse(fs.readFileSync(keyPath, "utf8"));
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-});
-
-// Firebase の初期化
-admin.initializeApp({
-  credential: admin.credential.cert(path.resolve(keyPath)),
 });
 const db = admin.firestore();
 
