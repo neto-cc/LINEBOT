@@ -63,44 +63,59 @@ async function handleEvent(event) {
     const docRef = db.collection("message").doc(receivedMessage);
     const doc = await docRef.get();
 
+    let responseMessage;
     if (doc.exists) {
-      const responseMessage = doc.data().response;
-
-      if (responseMessage.startsWith("http")) {
-        // 画像URLの場合、画像メッセージを送信
-        return client.replyMessage(event.replyToken, {
-          type: "image",
-          originalContentUrl: responseMessage,
-          previewImageUrl: responseMessage,
-        });
-      } else {
-        // フィードバックボタン付きのメッセージを送信
-        return client.replyMessage(event.replyToken, {
-          type: "template",
-          altText: "フィードバックをお聞かせください",
-          template: {
-            type: "buttons",
-            text: responseMessage,
-            actions: [
-              {
-                type: "postback",
-                label: "役に立った",
-                data: "feedback:役に立った"
-              },
-              {
-                type: "postback",
-                label: "役に立たなかった",
-                data: "feedback:役に立たなかった"
-              }
-            ]
-          }
-        });
-      }
+      responseMessage = doc.data().response;
     } else {
       console.log("No response found for the message.");
+      responseMessage = "すみません、そのメッセージには対応できません。";
+    }
+
+    // 画像メッセージかテキストメッセージを判別
+    if (responseMessage.startsWith("http")) {
+      // 画像URLの場合
       return client.replyMessage(event.replyToken, {
-        type: "text",
-        text: "すみません、そのメッセージには対応できません。"
+        type: "template",
+        altText: "画像を送信しました。フィードバックをお願いします。",
+        template: {
+          type: "buttons",
+          text: "この画像は参考になりましたか？",
+          thumbnailImageUrl: responseMessage,
+          actions: [
+            {
+              type: "postback",
+              label: "役に立った",
+              data: "feedback:役に立った"
+            },
+            {
+              type: "postback",
+              label: "役に立たなかった",
+              data: "feedback:役に立たなかった"
+            }
+          ]
+        }
+      });
+    } else {
+      // テキストメッセージの場合
+      return client.replyMessage(event.replyToken, {
+        type: "template",
+        altText: "フィードバックをお願いします。",
+        template: {
+          type: "buttons",
+          text: responseMessage,
+          actions: [
+            {
+              type: "postback",
+              label: "役に立った",
+              data: "feedback:役に立った"
+            },
+            {
+              type: "postback",
+              label: "役に立たなかった",
+              data: "feedback:役に立たなかった"
+            }
+          ]
+        }
       });
     }
   }
