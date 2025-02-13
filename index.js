@@ -10,15 +10,23 @@ const config = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
 };
 
+if (!config.channelSecret || !config.channelAccessToken) {
+  console.error("Missing LINE API credentials. Please check your environment variables.");
+  process.exit(1);
+}
+
 // Firebaseキーの読み込み
 const firebaseKey = process.env.FIREBASE_KEY;
 let firebaseServiceAccount;
 
 try {
+  if (!firebaseKey) {
+    throw new Error("FIREBASE_KEY is not defined in the environment variables.");
+  }
   firebaseServiceAccount = JSON.parse(firebaseKey);
   console.log("Firebase key loaded successfully.");
 } catch (error) {
-  console.error("Failed to load Firebase key:", error);
+  console.error("Failed to load Firebase key:", error.message);
   process.exit(1);
 }
 
@@ -39,18 +47,30 @@ app.use((req, res, next) => {
   next();
 });
 
-// middlewareの適用
-app.use(middleware(config));
+// middlewareの適用（エラーハンドリング強化）
+app.use((req, res, next) => {
+  try {
+    middleware(config)(req, res, next);
+  } catch (err) {
+    console.error("Middleware error:", err);
+    res.status(403).send("Invalid signature");
+  }
+});
 
 // Webhookエンドポイント
 app.post("/webhook", (req, res) => {
   console.log("Received webhook event:", JSON.stringify(req.body, null, 2));
 
+  if (!req.body.events || req.body.events.length === 0) {
+    console.warn("No events received.");
+    return res.status(200).send("No events.");
+  }
+
   Promise.all(req.body.events.map(handleEvent))
     .then((result) => res.json(result))
     .catch((err) => {
       console.error("Error processing event:", err);
-      res.status(500).end();
+      res.status(500).send("Error processing event");
     });
 });
 
@@ -60,62 +80,17 @@ async function handleEvent(event) {
     const receivedMessage = event.message.text;
     console.log(`受信したメッセージ: ${receivedMessage}`);
 
-    const docRef = db.collection("message").doc(receivedMessage);
-    const doc = await docRef.get();
+    try {
+      const docRef = db.collection("message").doc(receivedMessage);
+      const doc = await docRef.get();
+      const responseMessage = doc.exists ? doc.data().response : "すみません、そのメッセージには対応できません。";
 
-    let responseMessage;
-    if (doc.exists) {
-      responseMessage = doc.data().response;
-    } else {
-      console.log("No response found for the message.");
-      responseMessage = "すみません、そのメッセージには対応できません。";
-    }
-
-    // 画像メッセージかテキストメッセージを判別
-    if (responseMessage.startsWith("http")) {
-      // 画像URLの場合
+      return sendResponse(event.replyToken, responseMessage);
+    } catch (error) {
+      console.error("Error accessing Firestore:", error);
       return client.replyMessage(event.replyToken, {
-        type: "template",
-        altText: "画像を送信しました。フィードバックをお願いします。",
-        template: {
-          type: "buttons",
-          text: "この画像は参考になりましたか？",
-          thumbnailImageUrl: responseMessage,
-          actions: [
-            {
-              type: "postback",
-              label: "役に立った",
-              data: "feedback:役に立った"
-            },
-            {
-              type: "postback",
-              label: "役に立たなかった",
-              data: "feedback:役に立たなかった"
-            }
-          ]
-        }
-      });
-    } else {
-      // テキストメッセージの場合
-      return client.replyMessage(event.replyToken, {
-        type: "template",
-        altText: "フィードバックをお願いします。",
-        template: {
-          type: "buttons",
-          text: responseMessage,
-          actions: [
-            {
-              type: "postback",
-              label: "役に立った",
-              data: "feedback:役に立った"
-            },
-            {
-              type: "postback",
-              label: "役に立たなかった",
-              data: "feedback:役に立たなかった"
-            }
-          ]
-        }
+        type: "text",
+        text: "データ取得中にエラーが発生しました。",
       });
     }
   }
@@ -128,18 +103,59 @@ async function handleEvent(event) {
       const feedback = postbackData.replace("feedback:", "");
       console.log(`Feedback received: ${feedback}`);
 
-      await db.collection("feedback").add({	
-        feedback,
-        timestamp: new Date(),
-      });
+      try {
+        await db.collection("feedback").add({
+          feedback,
+          timestamp: new Date(),
+        });
 
-      return client.replyMessage(event.replyToken, {
-        type: "text",
-        text: "ご協力ありがとうございます！"
-      });
+        return client.replyMessage(event.replyToken, {
+          type: "text",
+          text: "ご協力ありがとうございます！",
+        });
+      } catch (error) {
+        console.error("Error saving feedback:", error);
+        return client.replyMessage(event.replyToken, {
+          type: "text",
+          text: "フィードバックの保存中にエラーが発生しました。",
+        });
+      }
     }
   }
 }
+
+// レスポンス送信関数（画像 or テキストを判定して送信）
+function sendResponse(replyToken, responseMessage) {
+  if (responseMessage.startsWith("http")) {
+    return client.replyMessage(replyToken, {
+      type: "template",
+      altText: "画像を送信しました。フィードバックをお願いします。",
+      template: {
+        type: "buttons",
+        text: "この画像は参考になりましたか？",
+        thumbnailImageUrl: responseMessage,
+        actions: [
+          { type: "postback", label: "役に立った", data: "feedback:役に立った" },
+          { type: "postback", label: "役に立たなかった", data: "feedback:役に立たなかった" },
+        ],
+      },
+    });
+  } else {
+    return client.replyMessage(replyToken, {
+      type: "template",
+      altText: "フィードバックをお願いします。",
+      template: {
+        type: "buttons",
+        text: responseMessage,
+        actions: [
+          { type: "postback", label: "役に立った", data: "feedback:役に立った" },
+          { type: "postback", label: "役に立たなかった", data: "feedback:役に立たなかった" },
+        ],
+      },
+    });
+  }
+}
+
 // サーバー起動
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
