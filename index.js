@@ -74,17 +74,33 @@ async function handleEvent(event) {
           previewImageUrl: responseMessage,
         });
       } else {
-        // 通常のテキストメッセージ
+        // フィードバックボタン付きのメッセージを送信
         return client.replyMessage(event.replyToken, {
-          type: "text",
-          text: responseMessage,
+          type: "template",
+          altText: "フィードバックをお聞かせください",
+          template: {
+            type: "buttons",
+            text: responseMessage,
+            actions: [
+              {
+                type: "postback",
+                label: "役に立った",
+                data: "feedback:役に立った"
+              },
+              {
+                type: "postback",
+                label: "役に立たなかった",
+                data: "feedback:役に立たなかった"
+              }
+            ]
+          }
         });
       }
     } else {
       console.log("No response found for the message.");
       return client.replyMessage(event.replyToken, {
         type: "text",
-        text: "すみません、そのメッセージには対応できません。",
+        text: "すみません、そのメッセージには対応できません。"
       });
     }
   }
@@ -97,19 +113,18 @@ async function handleEvent(event) {
       const feedback = postbackData.replace("feedback:", "");
       console.log(`Feedback received: ${feedback}`);
 
-      await db.collection("feedback").add({
+      await db.collection("feedback").add({	
         feedback,
         timestamp: new Date(),
       });
 
       return client.replyMessage(event.replyToken, {
         type: "text",
-        text: "ご協力ありがとうございます！",
+        text: "ご協力ありがとうございます！"
       });
     }
   }
 }
-
 // サーバー起動
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
