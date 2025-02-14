@@ -11,6 +11,12 @@ const config = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
 };
 
+const admin = require("firebase-admin");
+admin.initializeApp({
+  credential: admin.credential.cert(firebaseServiceAccount),
+});
+
+
 // Firebaseキーの読み込み
 const firebaseKeyPath = process.env.FIREBASE_KEY_PATH || "./config/service-account.json";
 let firebaseServiceAccount;
@@ -24,10 +30,6 @@ try {
 }
 
 // Firebase Admin SDKの初期化
-const admin = require("firebase-admin");
-admin.initializeApp({
-  credential: admin.credential.cert(firebaseServiceAccount),
-});
 
 const db = admin.firestore();
 
