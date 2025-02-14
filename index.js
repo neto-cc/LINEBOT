@@ -2,6 +2,7 @@
 const express = require("express");
 require("dotenv").config();
 const fs = require("fs");
+const admin = require("firebase-admin");
 
 const app = express();
 
@@ -18,29 +19,28 @@ if (!config.channelSecret || !config.channelAccessToken) {
 }
 
 // === Firebaseの設定 & 初期化 ===
-const firebaseKeyPath = process.env.FIREBASE_KEY || "./etc/secrets/firebase-key.json";
-let firebaseServiceAccount;
-
 try {
+  // ファイルが存在するか確認
   if (!fs.existsSync(firebaseKeyPath)) {
     throw new Error(`Firebase key file not found: ${firebaseKeyPath}`);
   }
+
+  // キーファイルを読み込んでパース
   const keyData = fs.readFileSync(firebaseKeyPath, "utf8");
   firebaseServiceAccount = JSON.parse(keyData);
-  console.log("? Firebase key loaded successfully.");
+  console.log("Firebase key loaded successfully.");
 } catch (error) {
-  console.error("? Failed to load Firebase key:", error.message);
+  console.error("Failed to load Firebase key:", error.message);
   process.exit(1);
 }
 
-const admin = require("firebase-admin");
 try {
   admin.initializeApp({
     credential: admin.credential.cert(firebaseServiceAccount),
   });
-  console.log("? Firebase initialized successfully.");
+  console.log("Firebase initialized successfully.");
 } catch (error) {
-  console.error("? Failed to initialize Firebase:", error.message);
+  console.error("Failed to initialize Firebase:", error.message);
   process.exit(1);
 }
 
