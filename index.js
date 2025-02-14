@@ -65,21 +65,10 @@ async function handleEvent(event) {
 
     if (doc.exists) {
       const responseMessage = doc.data().response;
-
-      if (responseMessage.startsWith("http")) {
-        // 画像URLの場合、画像メッセージを送信
-        return client.replyMessage(event.replyToken, {
-          type: "image",
-          originalContentUrl: responseMessage,
-          previewImageUrl: responseMessage,
-        });
-      } else {
-        // 通常のテキストメッセージ
-        return client.replyMessage(event.replyToken, {
-          type: "text",
-          text: responseMessage,
-        });
-      }
+      return client.replyMessage(event.replyToken, {
+        type: "text",
+        text: responseMessage,
+      });
     } else {
       console.log("No response found for the message.");
       return client.replyMessage(event.replyToken, {
