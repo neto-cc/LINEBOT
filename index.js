@@ -14,9 +14,13 @@ const config = {
 
 // 環境変数のチェック
 if (!config.channelSecret || !config.channelAccessToken) {
-  console.error("? Missing LINE API credentials. Please check your environment variables.");
+  console.error("Missing LINE API credentials. Please check your environment variables.");
   process.exit(1);
 }
+
+// 環境変数から Firebase キーファイルのパスを取得
+const firebaseKeyPath = process.env.FIREBASE_KEY || "./config/service-account.json";
+let firebaseServiceAccount;
 
 // === Firebaseの設定 & 初期化 ===
 try {
@@ -51,10 +55,10 @@ app.use(middleware(config)); // ?? これを最優先で適用
 
 // Webhookエンドポイント
 app.post("/webhook", async (req, res) => {
-  console.log("?? Received webhook event:", JSON.stringify(req.body, null, 2));
+  console.log(" Received webhook event:", JSON.stringify(req.body, null, 2));
 
   if (!req.body.events || req.body.events.length === 0) {
-    console.warn("? No events received.");
+    console.warn("No events received.");
     return res.status(200).send("No events.");
   }
 
@@ -62,7 +66,7 @@ app.post("/webhook", async (req, res) => {
     await Promise.all(req.body.events.map(handleEvent));
     res.status(200).send("OK");
   } catch (err) {
-    console.error("? Error processing event:", err);
+    console.error("Error processing event:", err);
     res.status(500).send("Error processing event");
   }
 });
