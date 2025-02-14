@@ -3,7 +3,7 @@ const { Client, middleware } = require('@line/bot-sdk');
 const admin = require('firebase-admin');
 
 // 環境変数から Firebase の認証情報を取得
-const serviceAccount = JSON.parse(process.env.FIREBASE_CREDENTIALS);
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
@@ -13,8 +13,8 @@ const db = admin.firestore();
 
 // LINE Bot 設定
 const config = {
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
-  channelSecret: process.env.LINE_CHANNEL_SECRET
+  channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
+  channelSecret: process.env.CHANNEL_SECRET
 };
 
 const app = express();
