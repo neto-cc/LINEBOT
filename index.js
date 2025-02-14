@@ -47,11 +47,10 @@ const db = admin.firestore();
 // === LINEクライアントの作成 ===
 const client = new Client(config);
 
-// === ミドルウェア設定 ===
-app.use(express.json()); // JSONリクエストのパース
-app.use(middleware(config)); // LINE Botの署名チェック
+// === middleware の適用（順番に注意！） ===
+app.use(middleware(config)); // ?? これを最優先で適用
 
-// Webhookエンドポイント
+// Webhookエンドポイント専用のルート（署名検証を通すために `express.json()` を適用しない）
 app.post("/webhook", async (req, res) => {
   console.log("?? Received webhook event:", JSON.stringify(req.body, null, 2));
 
@@ -68,6 +67,9 @@ app.post("/webhook", async (req, res) => {
     res.status(500).send("Error processing event");
   }
 });
+
+// JSONリクエストを受け付けるためのミドルウェア（Webhook 以外のルートに適用）
+app.use(express.json());
 
 // === イベント処理関数 ===
 async function handleEvent(event) {
