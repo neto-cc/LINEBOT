@@ -1,7 +1,6 @@
 ﻿const { Client, middleware } = require("@line/bot-sdk");
 const express = require("express");
 require("dotenv").config();
-const fs = require("fs");
 const admin = require("firebase-admin");
 
 const app = express();
@@ -18,27 +17,27 @@ if (!config.channelSecret || !config.channelAccessToken) {
   process.exit(1);
 }
 
-// 環境変数から Firebase キーファイルのパスを取得
-const firebaseKeyPath = process.env.FIREBASE_KEY_PATH || "./config/service-account.json";
+// === Firebaseの設定 & 初期化 ===
 let firebaseServiceAccount;
 
-// === Firebaseの設定 & 初期化 ===
 try {
-  // ファイルが存在するか確認
-  if (!fs.existsSync(firebaseKeyPath)) {
-    throw new Error(`Firebase key file not found: ${firebaseKeyPath}`);
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    // ? Render などのクラウド環境では環境変数を使用
+    firebaseServiceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    console.log("Firebase credentials loaded from environment variable.");
+  } else {
+    // ? ローカル環境では `service-account.json` を使用
+    const fs = require("fs");
+    const firebaseKeyPath = "./config/service-account.json";
+
+    if (!fs.existsSync(firebaseKeyPath)) {
+      throw new Error(`Firebase key file not found: ${firebaseKeyPath}`);
+    }
+
+    firebaseServiceAccount = JSON.parse(fs.readFileSync(firebaseKeyPath, "utf8"));
+    console.log("? Firebase credentials loaded from service-account.json.");
   }
 
-  // キーファイルを読み込んでパース
-  const keyData = fs.readFileSync(firebaseKeyPath, "utf8");
-  firebaseServiceAccount = JSON.parse(keyData);
-  console.log("Firebase key loaded successfully.");
-} catch (error) {
-  console.error("Failed to load Firebase key:", error.message);
-  process.exit(1);
-}
-
-try {
   admin.initializeApp({
     credential: admin.credential.cert(firebaseServiceAccount),
   });
@@ -50,12 +49,12 @@ try {
 
 const db = admin.firestore();
 
-// === middleware の適用（順番に注意！） ===
-app.use(middleware(config)); // ?? これを最優先で適用
+// === middleware の適用 ===
+app.use(middleware(config));
 
 // Webhookエンドポイント
 app.post("/webhook", async (req, res) => {
-  console.log(" Received webhook event:", JSON.stringify(req.body, null, 2));
+  console.log("?? Received webhook event:", JSON.stringify(req.body, null, 2));
 
   if (!req.body.events || req.body.events.length === 0) {
     console.warn("No events received.");
@@ -71,7 +70,7 @@ app.post("/webhook", async (req, res) => {
   }
 });
 
-// JSONリクエストを受け付けるためのミドルウェア（Webhook 以外のルートに適用）
+// JSONリクエストを受け付けるためのミドルウェア
 app.use(express.json());
 
 // === イベント処理関数 ===
@@ -79,7 +78,7 @@ async function handleEvent(event) {
   try {
     if (event.type === "message" && event.message.type === "text") {
       const receivedMessage = event.message.text;
-      console.log(`?? 受信したメッセージ: ${receivedMessage}`);
+      console.log(`受信メッセージ: ${receivedMessage}`);
 
       const docRef = db.collection("message").doc(receivedMessage);
       const doc = await docRef.get();
@@ -92,7 +91,7 @@ async function handleEvent(event) {
       return await handlePostback(event);
     }
   } catch (error) {
-    console.error("? Error handling event:", error);
+    console.error("Error handling event:", error);
     return client.replyMessage(event.replyToken, {
       type: "text",
       text: "システムエラーが発生しました。",
@@ -106,7 +105,7 @@ async function handlePostback(event) {
 
   if (postbackData.startsWith("feedback:")) {
     const feedback = postbackData.replace("feedback:", "");
-    console.log(`?? Feedback received: ${feedback}`);
+    console.log(`Feedback received: ${feedback}`);
 
     try {
       await db.collection("feedback").add({
@@ -119,7 +118,7 @@ async function handlePostback(event) {
         text: "ご協力ありがとうございます！",
       });
     } catch (error) {
-      console.error("? Error saving feedback:", error);
+      console.error("Error saving feedback:", error);
       return client.replyMessage(event.replyToken, {
         type: "text",
         text: "フィードバックの保存中にエラーが発生しました。",
@@ -131,5 +130,5 @@ async function handlePostback(event) {
 // === サーバー起動 ===
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`?? Server is running on port ${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
 });
