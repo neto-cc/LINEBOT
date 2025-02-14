@@ -1,6 +1,7 @@
 ﻿const { Client, middleware } = require("@line/bot-sdk");
 const express = require("express");
 require("dotenv").config();
+const fs = require("fs");
 
 const app = express();
 
@@ -17,14 +18,15 @@ if (!config.channelSecret || !config.channelAccessToken) {
 }
 
 // === Firebaseの設定 & 初期化 ===
-const firebaseKey = process.env.FIREBASE_KEY;
+const firebaseKeyPath = process.env.FIREBASE_KEY || "./etc/secrets/firebase-key.json";
 let firebaseServiceAccount;
 
 try {
-  if (!firebaseKey) {
-    throw new Error("FIREBASE_KEY is not defined in the environment variables.");
+  if (!fs.existsSync(firebaseKeyPath)) {
+    throw new Error(`Firebase key file not found: ${firebaseKeyPath}`);
   }
-  firebaseServiceAccount = JSON.parse(firebaseKey);
+  const keyData = fs.readFileSync(firebaseKeyPath, "utf8");
+  firebaseServiceAccount = JSON.parse(keyData);
   console.log("? Firebase key loaded successfully.");
 } catch (error) {
   console.error("? Failed to load Firebase key:", error.message);
@@ -44,13 +46,10 @@ try {
 
 const db = admin.firestore();
 
-// === LINEクライアントの作成 ===
-const client = new Client(config);
-
 // === middleware の適用（順番に注意！） ===
 app.use(middleware(config)); // ?? これを最優先で適用
 
-// Webhookエンドポイント専用のルート（署名検証を通すために `express.json()` を適用しない）
+// Webhookエンドポイント
 app.post("/webhook", async (req, res) => {
   console.log("?? Received webhook event:", JSON.stringify(req.body, null, 2));
 
@@ -123,39 +122,6 @@ async function handlePostback(event) {
       });
     }
   }
-}
-
-// === レスポンス送信関数（画像 or テキストを判定して送信） ===
-function sendResponse(replyToken, responseMessage) {
-  const message =
-    responseMessage.startsWith("http")
-      ? {
-          type: "template",
-          altText: "画像を送信しました。フィードバックをお願いします。",
-          template: {
-            type: "buttons",
-            text: "この画像は参考になりましたか？",
-            thumbnailImageUrl: responseMessage,
-            actions: [
-              { type: "postback", label: "役に立った", data: "feedback:役に立った" },
-              { type: "postback", label: "役に立たなかった", data: "feedback:役に立たなかった" },
-            ],
-          },
-        }
-      : {
-          type: "template",
-          altText: "フィードバックをお願いします。",
-          template: {
-            type: "buttons",
-            text: responseMessage,
-            actions: [
-              { type: "postback", label: "役に立った", data: "feedback:役に立った" },
-              { type: "postback", label: "役に立たなかった", data: "feedback:役に立たなかった" },
-            ],
-          },
-        };
-
-  return client.replyMessage(replyToken, message);
 }
 
 // === サーバー起動 ===
