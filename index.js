@@ -1,6 +1,5 @@
 ﻿const { Client, middleware } = require("@line/bot-sdk");
 const express = require("express");
-const fs = require("fs");
 require("dotenv").config();
 
 const app = express();
@@ -11,25 +10,21 @@ const config = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
 };
 
+// Firebase Admin SDKの初期化
 const admin = require("firebase-admin");
-admin.initializeApp({
-  credential: admin.credential.cert(firebaseServiceAccount),
-});
 
-
-// Firebaseキーの読み込み
-const firebaseKeyPath = process.env.FIREBASE_KEY_PATH || "./config/service-account.json";
 let firebaseServiceAccount;
-
 try {
-  firebaseServiceAccount = JSON.parse(fs.readFileSync(firebaseKeyPath, "utf8"));
+  firebaseServiceAccount = JSON.parse(process.env.FIREBASE_KEY_PATH);
   console.log("Firebase key loaded successfully.");
 } catch (error) {
-  console.error("Failed to load Firebase key:", error);
+  console.error("Failed to parse Firebase key from environment variable:", error);
   process.exit(1);
 }
 
-// Firebase Admin SDKの初期化
+admin.initializeApp({
+  credential: admin.credential.cert(firebaseServiceAccount),
+});
 
 const db = admin.firestore();
 
