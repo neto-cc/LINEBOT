@@ -19,7 +19,7 @@ if (!config.channelSecret || !config.channelAccessToken) {
 }
 
 // 環境変数から Firebase キーファイルのパスを取得
-const firebaseKeyPath = process.env.FIREBASE_KEY || "./config/service-account.json";
+const firebaseKeyPath = process.env.FIREBASE_KEY PATH || "./config/service-account.json";
 let firebaseServiceAccount;
 
 // === Firebaseの設定 & 初期化 ===
