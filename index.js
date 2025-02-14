@@ -11,7 +11,7 @@ const config = {
 };
 
 // Firebaseキーの読み込み
-const firebaseKey = process.env.FIREBASE_KEY;
+const firebaseKey = process.env.FIREBASE_KEY_PATH;
 let firebaseServiceAccount;
 
 try {
@@ -65,10 +65,21 @@ async function handleEvent(event) {
 
     if (doc.exists) {
       const responseMessage = doc.data().response;
-      return client.replyMessage(event.replyToken, {
-        type: "text",
-        text: responseMessage,
-      });
+
+      if (responseMessage.startsWith("http")) {
+        // 画像URLの場合、画像メッセージを送信
+        return client.replyMessage(event.replyToken, {
+          type: "image",
+          originalContentUrl: responseMessage,
+          previewImageUrl: responseMessage,
+        });
+      } else {
+        // 通常のテキストメッセージ
+        return client.replyMessage(event.replyToken, {
+          type: "text",
+          text: responseMessage,
+        });
+      }
     } else {
       console.log("No response found for the message.");
       return client.replyMessage(event.replyToken, {
@@ -86,7 +97,7 @@ async function handleEvent(event) {
       const feedback = postbackData.replace("feedback:", "");
       console.log(`Feedback received: ${feedback}`);
 
-      await db.collection("feedback").add({	
+      await db.collection("feedback").add({
         feedback,
         timestamp: new Date(),
       });
