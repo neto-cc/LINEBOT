@@ -1,5 +1,6 @@
 ﻿const { Client, middleware } = require("@line/bot-sdk");
 const express = require("express");
+const fs = require("fs");
 require("dotenv").config();
 
 const app = express();
@@ -11,11 +12,11 @@ const config = {
 };
 
 // Firebaseキーの読み込み
-const firebaseKey = process.env.FIREBASE_KEY;
+const firebaseKeyPath = process.env.FIREBASE_KEY_PATH || "./config/service-account.json";
 let firebaseServiceAccount;
 
 try {
-  firebaseServiceAccount = JSON.parse(firebaseKey);
+  firebaseServiceAccount = JSON.parse(fs.readFileSync(firebaseKeyPath, "utf8"));
   console.log("Firebase key loaded successfully.");
 } catch (error) {
   console.error("Failed to load Firebase key:", error);
@@ -56,15 +57,19 @@ app.post("/webhook", (req, res) => {
 
 // イベント処理関数
 async function handleEvent(event) {
+  console.log("Received event:", event);
+
   if (event.type === "message" && event.message.type === "text") {
     const receivedMessage = event.message.text;
     console.log(`受信したメッセージ: ${receivedMessage}`);
 
+    // Firebaseからデータを取得
     const docRef = db.collection("message").doc(receivedMessage);
     const doc = await docRef.get();
 
     if (doc.exists) {
       const responseMessage = doc.data().response;
+      console.log("Found response:", responseMessage);
 
       if (responseMessage.startsWith("http")) {
         // 画像URLの場合、画像メッセージを送信
