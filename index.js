@@ -1,12 +1,18 @@
-﻿const { Client, middleware } = require('@line/bot-sdk');
-const express = require('express');
-const axios = require('axios');
-require('dotenv').config();
-const admin = require('firebase-admin');
+﻿const { Client, middleware } = require("@line/bot-sdk");
+const express = require("express");
+require("dotenv").config();
 
 const app = express();
 
-// Firebaseの設定
+// LINE Messaging API の設定
+const config = {
+  channelSecret: process.env.CHANNEL_SECRET,
+  channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
+};
+
+// Firebase Admin SDK の初期化
+const admin = require("firebase-admin");
+
 let firebaseServiceAccount;
 try {
   firebaseServiceAccount = JSON.parse(process.env.FIREBASE_KEY_PATH);
@@ -22,97 +28,89 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
-// LINE Messaging APIの設定
-const config = {
-  channelSecret: process.env.CHANNEL_SECRET,
-  channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
-};
-
-// LINEクライアントの作成
+// LINE クライアントの作成
 const client = new Client(config);
 
-// Webhookエンドポイントの処理
+// Content-Type ヘッダーを設定
+app.use((req, res, next) => {
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  next();
+});
+
+// middleware の適用
 app.use(middleware(config));
-app.use(express.json());
 
-// Webhookエンドポイント
-app.post('/webhook', async (req, res) => {
-  try {
-    console.log('Received webhook event:', JSON.stringify(req.body, null, 2));
+// Webhook エンドポイント
+app.post("/webhook", (req, res) => {
+  console.log("Received webhook event:", JSON.stringify(req.body, null, 2));
 
-    const events = req.body.events;
-    const results = await Promise.all(events.map(handleEvent));
-    res.json(results);
-  } catch (error) {
-    console.error('Error processing event:', error);
-    res.status(500).send('Internal Server Error');
-  }
+  Promise.all(req.body.events.map(handleEvent))
+    .then((result) => res.json(result))
+    .catch((err) => {
+      console.error("Error processing event:", err);
+      res.status(500).end();
+    });
 });
 
 // イベント処理関数
 async function handleEvent(event) {
-  try {
-    console.log("Received event:", event);
+  console.log("Received event:", event);
 
-    if (event.type === 'message' && event.message.type === 'text') {
-      const receivedMessage = event.message.text;
-      console.log(`Received message: ${receivedMessage}`);
+  if (event.type === "message" && event.message.type === "text") {
+    const receivedMessage = event.message.text;
+    console.log(`受信したメッセージ: ${receivedMessage}`);
 
-      const docRef = db.collection('message').doc(receivedMessage);
-      const doc = await docRef.get();
+    // Firebase からデータを取得
+    const docRef = db.collection("message").doc(receivedMessage);
+    const doc = await docRef.get();
 
-      if (doc.exists) {
-        const responseMessage = doc.data().response;
-        console.log('Found response:', responseMessage);
+    if (doc.exists) {
+      const responseMessage = doc.data().response;
+      console.log("Found response:", responseMessage);
 
-        if (responseMessage.startsWith('http')) {
-          // 画像URLの場合
-          return client.replyMessage(event.replyToken, {
-            type: 'image',
-            originalContentUrl: responseMessage,
-            previewImageUrl: responseMessage,
-          });
-        } else {
-          // 通常のテキストメッセージ
-          return client.replyMessage(event.replyToken, {
-            type: 'text',
-            text: responseMessage,
-          });
-        }
+      if (responseMessage.startsWith("http")) {
+        return client.replyMessage(event.replyToken, {
+          type: "image",
+          originalContentUrl: responseMessage,
+          previewImageUrl: responseMessage,
+        });
       } else {
-        console.log('No response found for the message.');
         return client.replyMessage(event.replyToken, {
-          type: 'text',
-          text: "I'm sorry, I don't have a response for that.",
+          type: "text",
+          text: responseMessage,
         });
       }
+    } else {
+      console.log("No response found for the message.");
+      return client.replyMessage(event.replyToken, {
+        type: "text",
+        text: "すみません、そのメッセージには対応できません。",
+      });
     }
+  }
 
-    if (event.type === 'postback') {
-      const postbackData = event.postback.data;
-      if (postbackData.startsWith('feedback:')) {
-        const feedback = postbackData.replace('feedback:', '');
-        console.log(`Feedback received: ${feedback}`);
+  if (event.type === "postback") {
+    const postbackData = event.postback.data;
 
-        await db.collection('feedback').add({
-          feedback,
-          timestamp: new Date(),
-        });
+    if (postbackData.startsWith("feedback:")) {
+      const feedback = postbackData.replace("feedback:", "");
+      console.log(`Feedback received: ${feedback}`);
 
-        return client.replyMessage(event.replyToken, {
-          type: 'text',
-          text: 'Thank you for your feedback!',
-        });
-      }
+      await db.collection("feedback").add({
+        feedback,
+        timestamp: new Date(),
+      });
+
+      return client.replyMessage(event.replyToken, {
+        type: "text",
+        text: "ご協力ありがとうございます！",
+      });
     }
-  } catch (error) {
-    console.error('Error handling event:', error);
-    throw error;
   }
 }
 
 // サーバー起動
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server is running on port ${PORT}`);
 });
