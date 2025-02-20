@@ -1,5 +1,6 @@
 ﻿const { Client, middleware } = require("@line/bot-sdk");
 const express = require("express");
+const axios = require("axios"); // axiosを追加
 require("dotenv").config();
 
 const app = express();
@@ -82,10 +83,27 @@ async function handleEvent(event) {
       }
     } else {
       console.log("No response found for the message.");
-      return client.replyMessage(event.replyToken, {
-        type: "text",
-        text: "すみません、そのメッセージには対応できません。",
-      });
+
+      // Firebaseにデータが見つからない場合はRasa APIへリクエストを送信
+      try {
+        const rasaResponse = await axios.post("http://localhost:5005/webhooks/rest/webhook", {
+          sender: event.source.userId, // ユーザーID
+          message: receivedMessage, // 受け取ったメッセージ
+        });
+
+        // Rasaからの応答をLINEに送信
+        const rasaMessage = rasaResponse.data[0]?.text || "すみません、そのメッセージには対応できません。";
+        return client.replyMessage(event.replyToken, {
+          type: "text",
+          text: rasaMessage,
+        });
+      } catch (error) {
+        console.error("Error communicating with Rasa:", error);
+        return client.replyMessage(event.replyToken, {
+          type: "text",
+          text: "Rasaとの通信エラーが発生しました。",
+        });
+      }
     }
   }
 
