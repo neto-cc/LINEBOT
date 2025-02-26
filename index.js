@@ -54,99 +54,74 @@ app.post("/webhook", (req, res) => {
     });
 });
 
-// ? イベント処理関数（async を明示）
+// ? イベント処理関数
 async function handleEvent(event) {
+  if (event.type === "follow") {
+    return sendMenu(event.replyToken);
+  }
+
   if (event.type === "message" && event.message.type === "text") {
     const receivedMessage = event.message.text;
     console.log(`受信したメッセージ: ${receivedMessage}`);
 
     if (receivedMessage === "メニュー") {
-      // クイックリプライの選択肢を送信
-      return client.replyMessage(event.replyToken, {
-        type: "text",
-        text: "選択してください：",
-        quickReply: {
-          items: [
-            {
-              type: "action",
-              action: {
-                type: "message",
-                label: "質問1",
-                text: "質問1",
-              },
-            },
-            {
-              type: "action",
-              action: {
-                type: "message",
-                label: "質問2",
-                text: "質問2",
-              },
-            },
-          ],
-        },
-      });
-    }
-
-    const docRef = db.collection("message").doc(receivedMessage);
-    const doc = await docRef.get();
-
-    if (doc.exists) {
-      const responseMessage = doc.data().response;
-
-      if (responseMessage.startsWith("http")) {
-        return client.replyMessage(event.replyToken, {
-          type: "image",
-          originalContentUrl: responseMessage,
-          previewImageUrl: responseMessage,
-        });
-      } else {
-        return client.replyMessage(event.replyToken, {
-          type: "text",
-          text: responseMessage,
-        });
-      }
-    } else {
-      console.log("No response found for the message.");
-      return client.replyMessage(event.replyToken, {
-        type: "text",
-        text: "すみません、そのメッセージには対応できません。",
-      });
+      return sendMenu(event.replyToken);
     }
   }
 
-  // ? ポストバックイベントの処理（async 化）
   if (event.type === "postback") {
     return handlePostback(event);
   }
 }
 
-// ? ポストバック処理を async 関数として分離
+// ? ポストバック処理（選択肢に応じた回答をして、再度ボタンを表示）
 async function handlePostback(event) {
   const postbackData = event.postback.data;
 
-  if (postbackData.startsWith("feedback:")) {
-    const feedback = postbackData.replace("feedback:", "");
-    console.log(`Feedback received: ${feedback}`);
+  let responseText = "不明な選択肢です。";
 
-    try {
-      await db.collection("feedback").add({
-        feedback,
-        timestamp: new Date(),
-      });
-
-      return client.replyMessage(event.replyToken, {
-        type: "text",
-        text: "ご協力ありがとうございます！",
-      });
-    } catch (error) {
-      console.error("Error saving feedback:", error);
-      return client.replyMessage(event.replyToken, {
-        type: "text",
-        text: "エラーが発生しました。もう一度お試しください。",
-      });
-    }
+  if (postbackData === "select:質問1") {
+    responseText = "質問1の回答です。";
+  } else if (postbackData === "select:質問2") {
+    responseText = "質問2の回答です。";
   }
+
+  return client.replyMessage(event.replyToken, [
+    {
+      type: "text",
+      text: responseText,
+    },
+    sendMenuTemplate(),
+  ]);
+}
+
+// ? ボタンメニューを送信
+function sendMenu(replyToken) {
+  return client.replyMessage(replyToken, sendMenuTemplate());
+}
+
+// ? ボタンメニューのテンプレート
+function sendMenuTemplate() {
+  return {
+    type: "template",
+    altText: "ボタンを選択してください",
+    template: {
+      type: "buttons",
+      text: "どれを選びますか？",
+      actions: [
+        {
+          type: "postback",
+          label: "質問1",
+          data: "select:質問1",
+        },
+        {
+          type: "postback",
+          label: "質問2",
+          data: "select:質問2",
+        },
+      ],
+    },
+  };
 }
 
 // サーバー起動
