@@ -1,47 +1,48 @@
 ﻿const { Client, middleware } = require("@line/bot-sdk");
 const express = require("express");
-const axios = require("axios");
 require("dotenv").config();
 
 const app = express();
 
-// LINE Messaging API の設定
+// LINE Messaging APIの設定
 const config = {
   channelSecret: process.env.CHANNEL_SECRET,
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
 };
 
-// Firebase Admin SDK の初期化
-const admin = require("firebase-admin");
-
+// Firebaseキーの読み込み
+const firebaseKey = process.env.FIREBASE_KEY_PATH;
 let firebaseServiceAccount;
+
 try {
-  firebaseServiceAccount = JSON.parse(process.env.FIREBASE_KEY_PATH);
+  firebaseServiceAccount = JSON.parse(firebaseKey);
   console.log("Firebase key loaded successfully.");
 } catch (error) {
-  console.error("Failed to parse Firebase key from environment variable:", error);
+  console.error("Failed to load Firebase key:", error);
   process.exit(1);
 }
 
+// Firebase Admin SDKの初期化
+const admin = require("firebase-admin");
 admin.initializeApp({
   credential: admin.credential.cert(firebaseServiceAccount),
 });
 
 const db = admin.firestore();
 
-// LINE クライアントの作成
+// LINEクライアントの作成
 const client = new Client(config);
 
-// Content-Type ヘッダーを設定
+// Content-Typeヘッダーを設定
 app.use((req, res, next) => {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   next();
 });
 
-// middleware の適用
+// middlewareの適用
 app.use(middleware(config));
 
-// Webhook エンドポイント
+// Webhookエンドポイント
 app.post("/webhook", (req, res) => {
   console.log("Received webhook event:", JSON.stringify(req.body, null, 2));
 
@@ -55,63 +56,40 @@ app.post("/webhook", (req, res) => {
 
 // イベント処理関数
 async function handleEvent(event) {
-  console.log("Received event:", event);
-
   if (event.type === "message" && event.message.type === "text") {
     const receivedMessage = event.message.text;
     console.log(`受信したメッセージ: ${receivedMessage}`);
 
-    // Rasaへ送信
-    try {
-      const rasaResponse = await axios.post("https://rasa-vt1z.onrender.com/webhooks/rest/webhook", {
-        sender: event.source.userId,
-        message: receivedMessage,
-      });
+    const docRef = db.collection("message").doc(receivedMessage);
+    const doc = await docRef.get();
 
-      console.log("Rasa Response:", JSON.stringify(rasaResponse.data, null, 2));
+    if (doc.exists) {
+      const responseMessage = doc.data().response;
 
-      if (!rasaResponse.data || rasaResponse.data.length === 0) {
-        throw new Error("Rasaからの適切な応答が得られませんでした");
+      if (responseMessage.startsWith("http")) {
+        // 画像URLの場合、画像メッセージを送信
+        return client.replyMessage(event.replyToken, {
+          type: "image",
+          originalContentUrl: responseMessage,
+          previewImageUrl: responseMessage,
+        });
+      } else {
+        // 通常のテキストメッセージ
+        return client.replyMessage(event.replyToken, {
+          type: "text",
+          text: responseMessage,
+        });
       }
-
-      const rasaMessage = rasaResponse.data[0]?.text || "すみません、そのメッセージには対応できません。";
-      const intent = rasaResponse.data[0]?.intent?.name; // Rasaのintent名
-
-      if (intent) {
-        console.log(`Rasaからのintent: ${intent}`);
-
-        // Firestoreからintentに対応するresponseを取得
-        const docRef = db.collection("message").doc(intent);
-        const doc = await docRef.get();
-
-        if (doc.exists) {
-          const firestoreResponse = doc.data().response;
-          console.log(`Firestoreからのresponse: ${firestoreResponse}`);
-
-          return client.replyMessage(event.replyToken, {
-            type: "text",
-            text: firestoreResponse,
-          });
-        } else {
-          console.log("Firestoreに該当のintentデータが見つかりませんでした。");
-        }
-      }
-
-      // Firestoreにデータがなかった場合、Rasaのメッセージを返す
+    } else {
+      console.log("No response found for the message.");
       return client.replyMessage(event.replyToken, {
         type: "text",
-        text: rasaMessage,
-      });
-
-    } catch (error) {
-      console.error("Error communicating with Rasa or Firestore:", error);
-      return client.replyMessage(event.replyToken, {
-        type: "text",
-        text: "システムエラーが発生しました。",
+        text: "すみません、そのメッセージには対応できません。",
       });
     }
   }
 
+  // ポストバックイベントの処理
   if (event.type === "postback") {
     const postbackData = event.postback.data;
 
@@ -134,6 +112,6 @@ async function handleEvent(event) {
 
 // サーバー起動
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, "0.0.0.0", () => {
+app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
