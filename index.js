@@ -54,7 +54,7 @@ app.post("/webhook", (req, res) => {
     });
 });
 
-// イベント処理関数
+// ? イベント処理関数（async を明示）
 async function handleEvent(event) {
   if (event.type === "message" && event.message.type === "text") {
     const receivedMessage = event.message.text;
@@ -114,17 +114,22 @@ async function handleEvent(event) {
       });
     }
   }
+
+  // ? ポストバックイベントの処理（async 化）
+  if (event.type === "postback") {
+    return handlePostback(event);
+  }
 }
 
+// ? ポストバック処理を async 関数として分離
+async function handlePostback(event) {
+  const postbackData = event.postback.data;
 
-  // ポストバックイベントの処理
-  if (event.type === "postback") {
-    const postbackData = event.postback.data;
+  if (postbackData.startsWith("feedback:")) {
+    const feedback = postbackData.replace("feedback:", "");
+    console.log(`Feedback received: ${feedback}`);
 
-    if (postbackData.startsWith("feedback:")) {
-      const feedback = postbackData.replace("feedback:", "");
-      console.log(`Feedback received: ${feedback}`);
-
+    try {
       await db.collection("feedback").add({
         feedback,
         timestamp: new Date(),
@@ -133,6 +138,12 @@ async function handleEvent(event) {
       return client.replyMessage(event.replyToken, {
         type: "text",
         text: "ご協力ありがとうございます！",
+      });
+    } catch (error) {
+      console.error("Error saving feedback:", error);
+      return client.replyMessage(event.replyToken, {
+        type: "text",
+        text: "エラーが発生しました。もう一度お試しください。",
       });
     }
   }
