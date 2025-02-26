@@ -60,6 +60,34 @@ async function handleEvent(event) {
     const receivedMessage = event.message.text;
     console.log(`受信したメッセージ: ${receivedMessage}`);
 
+    if (receivedMessage === "メニュー") {
+      // クイックリプライの選択肢を送信
+      return client.replyMessage(event.replyToken, {
+        type: "text",
+        text: "選択してください：",
+        quickReply: {
+          items: [
+            {
+              type: "action",
+              action: {
+                type: "message",
+                label: "質問1",
+                text: "質問1",
+              },
+            },
+            {
+              type: "action",
+              action: {
+                type: "message",
+                label: "質問2",
+                text: "質問2",
+              },
+            },
+          ],
+        },
+      });
+    }
+
     const docRef = db.collection("message").doc(receivedMessage);
     const doc = await docRef.get();
 
@@ -67,14 +95,12 @@ async function handleEvent(event) {
       const responseMessage = doc.data().response;
 
       if (responseMessage.startsWith("http")) {
-        // 画像URLの場合、画像メッセージを送信
         return client.replyMessage(event.replyToken, {
           type: "image",
           originalContentUrl: responseMessage,
           previewImageUrl: responseMessage,
         });
       } else {
-        // 通常のテキストメッセージ
         return client.replyMessage(event.replyToken, {
           type: "text",
           text: responseMessage,
@@ -88,6 +114,8 @@ async function handleEvent(event) {
       });
     }
   }
+}
+
 
   // ポストバックイベントの処理
   if (event.type === "postback") {
