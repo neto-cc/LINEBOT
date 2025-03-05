@@ -5,37 +5,42 @@ require("dotenv").config();
 
 const app = express();
 
-// LINE Messaging API の設定
+// LINE Messaging APIの設定
 const config = {
   channelSecret: process.env.CHANNEL_SECRET,
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
 };
 
-// Firebase Admin SDK の初期化
-const admin = require("firebase-admin");
-
+// Firebaseキーの読み込み
+const firebaseKey = process.env.FIREBASE_KEY_PATH;
 let firebaseServiceAccount;
+
 try {
-  firebaseServiceAccount = JSON.parse(process.env.FIREBASE_KEY_PATH);
+  firebaseServiceAccount = JSON.parse(firebaseKey);
   console.log("Firebase key loaded successfully.");
 } catch (error) {
-  console.error("Failed to parse Firebase key from environment variable:", error);
+  console.error("Failed to load Firebase key:", error);
   process.exit(1);
 }
 
+// Firebase Admin SDKの初期化
+const admin = require("firebase-admin");
 admin.initializeApp({
   credential: admin.credential.cert(firebaseServiceAccount),
 });
 
 const db = admin.firestore();
 
-// LINE クライアントの作成
+// LINEクライアントの作成
 const client = new Client(config);
 
-// middleware の適用
+// Rasaのエンドポイント設定
+const RASA_URL = process.env.RASA_URL || "https://your-rasa-server.com/webhooks/rest/webhook";
+
+// middlewareの適用
 app.use(middleware(config));
 
-// Webhook エンドポイント
+// Webhookエンドポイント
 app.post("/webhook", (req, res) => {
   console.log("Received webhook event:", JSON.stringify(req.body, null, 2));
 
@@ -49,59 +54,63 @@ app.post("/webhook", (req, res) => {
 
 // イベント処理関数
 async function handleEvent(event) {
-  console.log("Received event:", event);
-
   if (event.type === "message" && event.message.type === "text") {
     const receivedMessage = event.message.text;
     console.log(`受信したメッセージ: ${receivedMessage}`);
 
     try {
-      // ?? Rasa にメッセージを送ってインテントを取得
-      const rasaResponse = await axios.post("https://rasa-vt1z.onrender.com", {
-        text: receivedMessage,
+      // Rasaへメッセージ送信
+      const rasaResponse = await axios.post(RASA_URL, {
+        sender: event.source.userId, // ユーザーのIDをRasaに送信
+        message: receivedMessage,
       });
 
-      console.log("Rasa Response:", JSON.stringify(rasaResponse.data, null, 2));
+      // Rasaのレスポンスを処理
+      if (rasaResponse.data.length > 0) {
+        const messages = rasaResponse.data.map((msg) => ({
+          type: "text",
+          text: msg.text,
+        }));
 
-      if (!rasaResponse.data.intent) {
-        throw new Error("Intent not found");
-      }
-
-      const intent = rasaResponse.data.intent.name;
-      console.log(`Detected intent: ${intent}`);
-
-      // ?? Firebase でインテント名を使ってデータを検索
-      const messageSnapshot = await db.collection("intents").where("intent", "==", intent).get();
-
-      if (!messageSnapshot.empty) {
-        const firestoreResponse = messageSnapshot.docs[0].data().response;
-        console.log(`Firestoreからのresponse: ${firestoreResponse}`);
-
+        return client.replyMessage(event.replyToken, messages);
+      } else {
         return client.replyMessage(event.replyToken, {
           type: "text",
-          text: firestoreResponse,
+          text: "すみません、適切な応答が見つかりませんでした。",
         });
       }
-
-      // ?? Firestore に該当データがない場合のデフォルトメッセージ
-      return client.replyMessage(event.replyToken, {
-        type: "text",
-        text: "すみません、その内容にはまだ対応していません。",
-      });
     } catch (error) {
-      console.error("Error processing message:", error);
+      console.error("Error communicating with Rasa:", error);
       return client.replyMessage(event.replyToken, {
         type: "text",
-        text: "システムエラーが発生しました。",
+        text: "エラーが発生しました。",
       });
     }
   }
 
-  return Promise.resolve(null);
+  // ポストバックイベントの処理
+  if (event.type === "postback") {
+    const postbackData = event.postback.data;
+
+    if (postbackData.startsWith("feedback:")) {
+      const feedback = postbackData.replace("feedback:", "");
+      console.log(`Feedback received: ${feedback}`);
+
+      await db.collection("feedback").add({
+        feedback,
+        timestamp: new Date(),
+      });
+
+      return client.replyMessage(event.replyToken, {
+        type: "text",
+        text: "ご協力ありがとうございます！",
+      });
+    }
+  }
 }
 
 // サーバー起動
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, "0.0.0.0", () => {
+app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
