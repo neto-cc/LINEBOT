@@ -30,7 +30,7 @@ const db = admin.firestore();
 const client = new Client(config);
 
 // Rasaのエンドポイント設定
-const RASA_URL = process.env.RASA_URL || "http://your-rasa-server.com/webhooks/rest/webhook";
+const RASA_URL = process.env.RASA_URL || "https://rasa-vt1z.onrender.com/webhooks/rest/webhook";
 
 // middlewareの適用
 app.use(middleware(config));
