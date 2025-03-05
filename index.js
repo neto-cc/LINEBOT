@@ -1,48 +1,41 @@
 ﻿const { Client, middleware } = require("@line/bot-sdk");
 const express = require("express");
+const axios = require("axios");
 require("dotenv").config();
 
 const app = express();
 
-// LINE Messaging APIの設定
+// LINE Messaging API の設定
 const config = {
   channelSecret: process.env.CHANNEL_SECRET,
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
 };
 
-// Firebaseキーの読み込み
-const firebaseKey = process.env.FIREBASE_KEY_PATH;
-let firebaseServiceAccount;
+// Firebase Admin SDK の初期化
+const admin = require("firebase-admin");
 
+let firebaseServiceAccount;
 try {
-  firebaseServiceAccount = JSON.parse(firebaseKey);
+  firebaseServiceAccount = JSON.parse(process.env.FIREBASE_KEY_PATH);
   console.log("Firebase key loaded successfully.");
 } catch (error) {
-  console.error("Failed to load Firebase key:", error);
+  console.error("Failed to parse Firebase key from environment variable:", error);
   process.exit(1);
 }
 
-// Firebase Admin SDKの初期化
-const admin = require("firebase-admin");
 admin.initializeApp({
   credential: admin.credential.cert(firebaseServiceAccount),
 });
 
 const db = admin.firestore();
 
-// LINEクライアントの作成
+// LINE クライアントの作成
 const client = new Client(config);
 
-// Content-Typeヘッダーを設定
-app.use((req, res, next) => {
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
-  next();
-});
-
-// middlewareの適用
+// middleware の適用
 app.use(middleware(config));
 
-// Webhookエンドポイント
+// Webhook エンドポイント
 app.post("/webhook", (req, res) => {
   console.log("Received webhook event:", JSON.stringify(req.body, null, 2));
 
@@ -56,62 +49,59 @@ app.post("/webhook", (req, res) => {
 
 // イベント処理関数
 async function handleEvent(event) {
+  console.log("Received event:", event);
+
   if (event.type === "message" && event.message.type === "text") {
     const receivedMessage = event.message.text;
     console.log(`受信したメッセージ: ${receivedMessage}`);
 
-    const docRef = db.collection("message").doc(receivedMessage);
-    const doc = await docRef.get();
+    try {
+      // ?? Rasa にメッセージを送ってインテントを取得
+      const rasaResponse = await axios.post("https://rasa-vt1z.onrender.com", {
+        text: receivedMessage,
+      });
 
-    if (doc.exists) {
-      const responseMessage = doc.data().response;
+      console.log("Rasa Response:", JSON.stringify(rasaResponse.data, null, 2));
 
-      if (responseMessage.startsWith("http")) {
-        // 画像URLの場合、画像メッセージを送信
-        return client.replyMessage(event.replyToken, {
-          type: "image",
-          originalContentUrl: responseMessage,
-          previewImageUrl: responseMessage,
-        });
-      } else {
-        // 通常のテキストメッセージ
+      if (!rasaResponse.data.intent) {
+        throw new Error("Intent not found");
+      }
+
+      const intent = rasaResponse.data.intent.name;
+      console.log(`Detected intent: ${intent}`);
+
+      // ?? Firebase でインテント名を使ってデータを検索
+      const messageSnapshot = await db.collection("intents").where("intent", "==", intent).get();
+
+      if (!messageSnapshot.empty) {
+        const firestoreResponse = messageSnapshot.docs[0].data().response;
+        console.log(`Firestoreからのresponse: ${firestoreResponse}`);
+
         return client.replyMessage(event.replyToken, {
           type: "text",
-          text: responseMessage,
+          text: firestoreResponse,
         });
       }
-    } else {
-      console.log("No response found for the message.");
+
+      // ?? Firestore に該当データがない場合のデフォルトメッセージ
       return client.replyMessage(event.replyToken, {
         type: "text",
-        text: "すみません、そのメッセージには対応できません。",
+        text: "すみません、その内容にはまだ対応していません。",
+      });
+    } catch (error) {
+      console.error("Error processing message:", error);
+      return client.replyMessage(event.replyToken, {
+        type: "text",
+        text: "システムエラーが発生しました。",
       });
     }
   }
 
-  // ポストバックイベントの処理
-  if (event.type === "postback") {
-    const postbackData = event.postback.data;
-
-    if (postbackData.startsWith("feedback:")) {
-      const feedback = postbackData.replace("feedback:", "");
-      console.log(`Feedback received: ${feedback}`);
-
-      await db.collection("feedback").add({
-        feedback,
-        timestamp: new Date(),
-      });
-
-      return client.replyMessage(event.replyToken, {
-        type: "text",
-        text: "ご協力ありがとうございます！",
-      });
-    }
-  }
+  return Promise.resolve(null);
 }
 
 // サーバー起動
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server is running on port ${PORT}`);
 });
