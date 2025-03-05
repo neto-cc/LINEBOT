@@ -11,101 +11,91 @@ const config = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
 };
 
-// Firebaseキーの読み込み
-const firebaseKey = process.env.FIREBASE_KEY_PATH;
+// Firebaseのセットアップ
+const admin = require("firebase-admin");
 let firebaseServiceAccount;
-
 try {
-  firebaseServiceAccount = JSON.parse(firebaseKey);
+  firebaseServiceAccount = JSON.parse(process.env.FIREBASE_KEY_PATH);
   console.log("Firebase key loaded successfully.");
 } catch (error) {
   console.error("Failed to load Firebase key:", error);
   process.exit(1);
 }
-
-// Firebase Admin SDKの初期化
-const admin = require("firebase-admin");
 admin.initializeApp({
   credential: admin.credential.cert(firebaseServiceAccount),
 });
-
 const db = admin.firestore();
 
 // LINEクライアントの作成
 const client = new Client(config);
 
 // Rasaのエンドポイント設定
-const RASA_URL = process.env.RASA_URL || "https://rasa-vt1z.onrender.com/webhooks/rest/webhook";
+const RASA_URL = process.env.RASA_URL || "http://your-rasa-server.com/webhooks/rest/webhook";
 
 // middlewareの適用
 app.use(middleware(config));
 
 // Webhookエンドポイント
-app.post("/webhook", (req, res) => {
-  console.log("Received webhook event:", JSON.stringify(req.body, null, 2));
-
-  Promise.all(req.body.events.map(handleEvent))
-    .then((result) => res.json(result))
-    .catch((err) => {
-      console.error("Error processing event:", err);
-      res.status(500).end();
-    });
+app.post("/webhook", async (req, res) => {
+  try {
+    const events = req.body.events;
+    const results = await Promise.all(events.map(handleEvent));
+    res.json(results);
+  } catch (err) {
+    console.error("Error processing event:", err);
+    res.status(500).end();
+  }
 });
 
 // イベント処理関数
 async function handleEvent(event) {
-  if (event.type === "message" && event.message.type === "text") {
-    const receivedMessage = event.message.text;
-    console.log(`受信したメッセージ: ${receivedMessage}`);
-
-    try {
-      // Rasaへメッセージ送信
-      const rasaResponse = await axios.post(RASA_URL, {
-        sender: event.source.userId, // ユーザーのIDをRasaに送信
-        message: receivedMessage,
-      });
-
-      // Rasaのレスポンスを処理
-      if (rasaResponse.data.length > 0) {
-        const messages = rasaResponse.data.map((msg) => ({
-          type: "text",
-          text: msg.text,
-        }));
-
-        return client.replyMessage(event.replyToken, messages);
-      } else {
-        return client.replyMessage(event.replyToken, {
-          type: "text",
-          text: "すみません、適切な応答が見つかりませんでした。",
-        });
-      }
-    } catch (error) {
-      console.error("Error communicating with Rasa:", error);
-      return client.replyMessage(event.replyToken, {
-        type: "text",
-        text: "エラーが発生しました。",
-      });
-    }
+  if (event.type !== "message" || event.message.type !== "text") {
+    return Promise.resolve(null);
   }
 
-  // ポストバックイベントの処理
-  if (event.type === "postback") {
-    const postbackData = event.postback.data;
+  const userMessage = event.message.text;
+  const userId = event.source.userId;
+  console.log(`User (${userId}) sent: ${userMessage}`);
 
-    if (postbackData.startsWith("feedback:")) {
-      const feedback = postbackData.replace("feedback:", "");
-      console.log(`Feedback received: ${feedback}`);
+  try {
+    // Rasaにメッセージを送信
+    const rasaResponse = await axios.post(RASA_URL, {
+      sender: userId,
+      message: userMessage,
+    });
 
-      await db.collection("feedback").add({
-        feedback,
-        timestamp: new Date(),
-      });
-
+    if (rasaResponse.data.length === 0) {
       return client.replyMessage(event.replyToken, {
         type: "text",
-        text: "ご協力ありがとうございます！",
+        text: "すみません、理解できませんでした。",
       });
     }
+
+    const intent = rasaResponse.data[0].text;
+    console.log(`Detected intent: ${intent}`);
+
+    // Firestoreから応答を取得
+    const docRef = db.collection("responses").doc(intent);
+    const doc = await docRef.get();
+
+    let replyMessage;
+    if (doc.exists) {
+      replyMessage = doc.data().response;
+    } else {
+      replyMessage = "データが見つかりませんでした。";
+    }
+
+    return client.replyMessage(event.replyToken, {
+      type: "text",
+      text: replyMessage,
+    });
+
+  } catch (error) {
+    console.error("Error communicating with Rasa or Firestore:", error);
+    return client.replyMessage(event.replyToken, {
+      type: "text",
+      text: "エラーが発生しました。",
+    });
   }
 }
 
