@@ -60,7 +60,6 @@ async function handleEvent(event) {
   try {
     // Rasaにメッセージを送信
     const rasaResponse = await axios.post(RASA_URL, {
-      sender: userId,
       message: userMessage,
     });
 
